@@ -1,0 +1,17 @@
+Srource: eventstat
+Section: devel
+Priority: optional
+Maintainer: Colin King <colin.king@ubuntu.com>
+Standards-Version: 3.9.2
+Build-Depends: debhelper (>= 7)
+
+Package: eventstat
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: eventstat
+ Eventstat periodically dumps out the current kernel event state. 
+ It keeps track of current events and outputs the change in events
+ on each output update.  The tool requires sudo to run since it 
+ needs to write to /proc/timer_stats to start and stop the event
+ monitoring.
+

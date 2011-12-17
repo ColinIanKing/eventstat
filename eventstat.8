@@ -1,0 +1,52 @@
+.\"                                      Hey, EMACS: -*- nroff -*-
+.\" First parameter, NAME, should be all caps
+.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
+.\" other parameters are allowed: see man(7), man(1)
+.TH EVENTSTAT 1 "December 17, 2011"
+.\" Please adjust this date whenever revising the manpage.
+.\"
+.\" Some roff macros, for reference:
+.\" .nh        disable hyphenation
+.\" .hy        enable hyphenation
+.\" .ad l      left justify
+.\" .ad b      justify to both left and right margins
+.\" .nf        disable filling
+.\" .fi        enable filling
+.\" .br        insert line break
+.\" .sp <n>    insert n+1 empty lines
+.\" for manpage-specific macros, see man(7)
+.SH NAME
+eventstat \- a tool to measure system events.
+.br
+
+.SH SYNOPSIS
+.B eventstat
+.RI [ delay " [count]]
+.br
+
+.SH DESCRIPTION
+eventstat is a program that dumps the current active system events. 
+
+.SH EXAMPLES
+.LP
+Dump events every second until stopped.
+.RS 8
+sudo eventstat
+.RE
+.LP
+Dump events every 60 seconds until stopped.
+.RS 8
+sudo eventstat 60
+.RE
+.LP
+Dump events every 10 seconds just 5 times.
+.RS 8
+sudo eventstat 10 5
+.RE
+.SH SEE ALSO
+.BR powertop (8) 
+.SH AUTHOR
+eventstat was written by Colin King <colin.king@canonical.com>
+.PP
+This manual page was written by Colin King <colin.king@canonical.com>,
+for the Ubuntu project (but may be used by others).

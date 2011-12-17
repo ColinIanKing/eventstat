@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 Canonical
+ * Hugely modified parts from powertop-1.13, Copyright 2007, Intel Corporation
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -308,6 +309,10 @@ void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 	fclose(fp);
 }
 
+/*
+ *  set_timer_stat()
+ *	enable/disable timer stat
+ */
 void set_timer_stat(char *str)
 {
 	FILE *fp;
@@ -316,7 +321,7 @@ void set_timer_stat(char *str)
 		fprintf(stderr, "Cannot write to %s\n",TIMER_STATS);
 		exit(EXIT_FAILURE);
 	}
-	fprintf(fp, "%s", str);
+	fprintf(fp, "%s\n", str);
 	fclose(fp);
 }
 
@@ -351,6 +356,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	/* Should really catch signals and set back to zero before we die */
 	set_timer_stat("1");
 
 	timer_stats_old = calloc(TABLE_SIZE, sizeof(timer_stat_t*));

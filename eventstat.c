@@ -330,6 +330,13 @@ void set_timer_stat(char *str)
 	fclose(fp);
 }
 
+void show_usage(void)
+{
+	printf("Usage: %s [-n event_count] [duration] [count]\n", APP_NAME);
+	printf("\t-h help\n");
+	printf("\t-n specifies number of events to display\n");
+}
+
 int main(int argc, char **argv)
 {
 	timer_stat_t **timer_stats_old, **timer_stats_new, **tmp;
@@ -340,10 +347,13 @@ int main(int argc, char **argv)
 	bool forever = true;
 
 	for (;;) {
-		int c = getopt(argc, argv, "n:");
+		int c = getopt(argc, argv, "hn:");
 		if (c == -1)
 			break;
 		switch (c) {
+		case 'h':
+			show_usage();
+			exit(EXIT_SUCCESS);
 		case 'n':
 			n_lines = atoi(optarg);
 			if (n_lines < 1) {

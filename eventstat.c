@@ -345,7 +345,7 @@ int main(int argc, char **argv)
 		forever = false;
 		count = atoi(argv[2]);
 		if (count < 1) {
-			fprintf(stderr, "Count must be > 1\n");
+			fprintf(stderr, "Count must be > 0\n");
 			exit(EXIT_FAILURE);
 		}
 	}

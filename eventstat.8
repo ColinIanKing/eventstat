@@ -21,11 +21,17 @@ eventstat \- a tool to measure system events.
 
 .SH SYNOPSIS
 .B eventstat
-.RI [ delay " [count]]
+.RI [-n event_count] [ delay " [count]]
 .br
 
 .SH DESCRIPTION
 eventstat is a program that dumps the current active system events. 
+
+.SH OPTIONS
+powerstat options are as follow:
+.TP
+.B \-n event_count
+only display the first event_count number of top events.
 
 .SH EXAMPLES
 .LP
@@ -34,9 +40,9 @@ Dump events every second until stopped.
 sudo eventstat
 .RE
 .LP
-Dump events every 60 seconds until stopped.
+Dump the top 20 events every 60 seconds until stopped.
 .RS 8
-sudo eventstat 60
+sudo eventstat \-n 20 60
 .RE
 .LP
 Dump events every 10 seconds just 5 times.

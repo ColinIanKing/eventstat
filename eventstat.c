@@ -192,11 +192,13 @@ void timer_stat_sort_add(
  */
 void timer_stat_diff(
 	int duration,
+	int n_lines,
 	timer_stat_t *timer_stats_old[],
 	timer_stat_t *timer_stats_new[],
 	unsigned long *total)
 {
 	int i;
+	int j = 0;
 
 	timer_stat_t *sorted = NULL;
 
@@ -225,11 +227,14 @@ void timer_stat_diff(
 	printf("%1s %6s %-5s %-15s %-25s %-s\n",
 		"", "Evnt/s", "PID", "Task", "Func", "Timer");
 	while (sorted) {
-		printf("%1s %6.2f %5d %-15s %-25s %-s\n",
-			sorted->old ? " " : "N",
-			(double)sorted->delta / duration,
-			sorted->pid, sorted->task,
-			sorted->func, sorted->timer);
+		if ((n_lines == -1) || (j < n_lines)) {
+			j++;
+			printf("%1s %6.2f %5d %-15s %-25s %-s\n",
+				sorted->old ? " " : "N",
+				(double)sorted->delta / duration,
+				sorted->pid, sorted->task,
+				sorted->func, sorted->timer);
+		}
 		*total += sorted->delta;
 		sorted = sorted->sorted_next;
 	}
@@ -331,19 +336,35 @@ int main(int argc, char **argv)
 	unsigned long total;
 	int duration = 1;
 	int count = 1;
+	int n_lines = -1;
 	bool forever = true;
 
-	if (argc >= 2) {
-		duration = atoi(argv[1]);
+	for (;;) {
+		int c = getopt(argc, argv, "n:");
+		if (c == -1)
+			break;
+		switch (c) {
+		case 'n':
+			n_lines = atoi(optarg);
+			if (n_lines < 1) {
+				fprintf(stderr, "-n option must be greater than 0\n");
+				exit(EXIT_FAILURE);
+			}
+			break;
+		}
+	}
+
+	if (optind < argc) {
+		duration = atoi(argv[optind++]);
 		if (duration < 1) {
-			fprintf(stderr, "Duration must be > 1\n");
+			fprintf(stderr, "Duration must be > 0\n");
 			exit(EXIT_FAILURE);
 		}
 	}
 
-	if (argc == 3) {
+	if (optind < argc) {
 		forever = false;
-		count = atoi(argv[2]);
+		count = atoi(argv[optind++]);
 		if (count < 1) {
 			fprintf(stderr, "Count must be > 0\n");
 			exit(EXIT_FAILURE);
@@ -367,7 +388,7 @@ int main(int argc, char **argv)
 	while (forever || count--) {
 		sleep(duration);
 		get_events(timer_stats_new);
-		timer_stat_diff(duration,
+		timer_stat_diff(duration, n_lines,
 			timer_stats_old, timer_stats_new, &total);
 		timer_stat_free_contents(timer_stats_old);
 

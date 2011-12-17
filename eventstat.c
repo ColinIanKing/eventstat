@@ -73,7 +73,7 @@ void timer_stat_free_contents(
 
 	for (i=0; i<TABLE_SIZE; i++) {
 		timer_stat_t *ts = timer_stats[i];
-		
+
 		while (ts) {
 			timer_stat_t *next = ts->next;
 
@@ -82,7 +82,7 @@ void timer_stat_free_contents(
 			free(ts->timer);
 			free(ts->ident);
 			free(ts);
-	
+
 			ts = next;
 		}
 		timer_stats[i] = NULL;
@@ -110,7 +110,7 @@ void timer_stat_add(
 	snprintf(buf, sizeof(buf), "%d:%s:%s:%s", pid, task, func, timer);
 	h = hash_pjw(buf);
 	ts = timer_stats[h];
-	
+
 	while (ts != NULL) {
 		if (strcmp(ts->ident, buf) == 0) {
 			ts->count += count;
@@ -134,7 +134,7 @@ void timer_stat_add(
 	ts_new->next   = timer_stats[h];
 	ts_new->sorted_next = NULL;
 
-	if (ts_new->task == NULL ||	
+	if (ts_new->task == NULL ||
 	    ts_new->func == NULL ||
 	    ts_new->timer == NULL ||
 	    ts_new->ident == NULL) {
@@ -166,7 +166,7 @@ timer_stat_t *timer_stat_find(
 	return NULL;	/* no success */
 }
 
-/* 
+/*
  *  timer_stat_sort_add()
  *	add a timer stat to a sorted list of timer stats
  */
@@ -178,7 +178,7 @@ void timer_stat_sort_add(
 		if ((*sorted)->delta < new->delta) {
 			new->sorted_next = *(sorted);
 			break;
-		}		
+		}
 		sorted = &(*sorted)->sorted_next;
 	}
 	*sorted = new;
@@ -188,7 +188,7 @@ void timer_stat_sort_add(
  *  timer_stat_diff()
  *	find difference in event count between to hash table samples of timer
  *	stats.  We are interested in just current and new timers, not ones that
- *	silently die 
+ *	silently die
  */
 void timer_stat_diff(
 	int duration,
@@ -228,7 +228,7 @@ void timer_stat_diff(
 		printf("%1s %6.2f %5d %-15s %-25s %-s\n",
 			sorted->old ? " " : "N",
 			(double)sorted->delta / duration,
-			sorted->pid, sorted->task, 
+			sorted->pid, sorted->task,
 			sorted->func, sorted->timer);
 		*total += sorted->delta;
 		sorted = sorted->sorted_next;
@@ -239,7 +239,7 @@ void timer_stat_diff(
 /*
  *  get_events()
  *	scan /proc/timer_stats and populate a timer stat hash table with
- *	unique events 
+ *	unique events
  */
 void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 {
@@ -270,37 +270,37 @@ void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 			continue;
 
 		/* format: count[D], pid, task, func (timer) */
-			
+
 		while (*ptr && *ptr != ',')
 			ptr++;
 
 		if (*ptr != ',')
 			continue;
 
-		if (ptr > buf && *(ptr-1) == 'D') 
+		if (ptr > buf && *(ptr-1) == 'D')
 			continue;	/* Deferred event, skip */
 
 		ptr++;
 		sscanf(buf, "%lu", &count);
 		sscanf(ptr, "%d %s %s (%[^)])", &pid, task, func, timer);
 
-		if (strcmp(task, "swapper") == 0 && 
+		if (strcmp(task, "swapper") == 0 &&
 		    strcmp(func, "hrtimer_start_range_ns") == 0 &&
 		    strcmp(timer, "tick_sched_timer") == 0) {
 			strcpy(task, "[kern sched]");
 			strcpy(func, "Load balancing tick");
 		}
-	
-		if (strcmp(task, "insmod") == 0) 
+
+		if (strcmp(task, "insmod") == 0)
 			strcpy(task, "[kern mod]");
-		if (strcmp(task, "modprobe") == 0) 
+		if (strcmp(task, "modprobe") == 0)
 			strcpy(task, "[kern mod]");
-		if (strcmp(task, "swapper") == 0) 
+		if (strcmp(task, "swapper") == 0)
 			strcpy(task, "[kern core]");
 
 		if ((strncmp(func, "tick_nohz_", 10) == 0) ||
 		    (strncmp(func, "tick_setup_sched_timer", 20) == 0) ||
-		    (strcmp(task, APP_NAME) == 0)) 
+		    (strcmp(task, APP_NAME) == 0))
 			continue;
 
 		timer_stat_add(timer_stats, count, pid, task, func, timer);
@@ -370,11 +370,11 @@ int main(int argc, char **argv)
 		timer_stat_diff(duration,
 			timer_stats_old, timer_stats_new, &total);
 		timer_stat_free_contents(timer_stats_old);
-		
+
 		tmp             = timer_stats_old;
 		timer_stats_old = timer_stats_new;
 		timer_stats_new = tmp;
-		
+
 		printf("%lu Total events, %5.2f events/sec\n\n",
 			total, (double)total / duration);
 	}

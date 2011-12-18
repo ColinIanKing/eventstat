@@ -22,7 +22,10 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <signal.h>
 #include <unistd.h>
+#include <time.h>
+#include <sys/time.h>
 
 #define APP_NAME	"eventstat"
 #define TIMER_STATS	"/proc/timer_stats"
@@ -83,14 +86,24 @@ typedef struct {
 } sample_list_t;
 
 static timer_info_list_t timer_info_list;	/* cache list of timer_info */
-static sample_list_t	  sample_list;		/* list of samples, sorted in sample time order */
+static sample_list_t sample_list;		/* list of samples, sorted in sample time order */
 static char *csv_results;			/* results in comma separated values */
+static volatile bool stop_eventstat = false;	/* set by sighandler */
+
+/*
+ *  handle_sigint()
+ *      catch SIGINT and flag a stop
+ */
+static void handle_sigint(int dummy)
+{
+	stop_eventstat = true;
+}
 
 /*
  *  samples_free()
  *	free collected samples
  */
-void samples_free(void)
+static void samples_free(void)
 {
 	sample_delta_list_t *sdl = sample_list.head;
 
@@ -112,7 +125,7 @@ void samples_free(void)
  *  sample_add()
  *	add a timer_stat's delta and info field to a list at time position whence
  */
-void sample_add(timer_stat_t *timer_stat, unsigned long whence)
+static void sample_add(timer_stat_t *timer_stat, unsigned long whence)
 {
 	sample_delta_list_t *sdl = sample_list.head;
 	sample_delta_item_t *sdi;
@@ -165,7 +178,7 @@ void sample_add(timer_stat_t *timer_stat, unsigned long whence)
  *  sample_find()
  *	scan through a sample_delta_list for timer info, return NULL if not found
  */
-sample_delta_item_t inline *sample_find(sample_delta_list_t *sdl, timer_info_t *info)
+static sample_delta_item_t inline *sample_find(sample_delta_list_t *sdl, timer_info_t *info)
 {
 	sample_delta_item_t	*sdi = sdl->head;
 
@@ -181,7 +194,7 @@ sample_delta_item_t inline *sample_find(sample_delta_list_t *sdl, timer_info_t *
  * info_compare_total()
  *	used by qsort to sort array in sample event total order
  */
-int info_compare_total(const void *item1, const void *item2)
+static int info_compare_total(const void *item1, const void *item2)
 {
 	timer_info_t **info1 = (timer_info_t **)item1;
 	timer_info_t **info2 = (timer_info_t **)item2;
@@ -189,7 +202,7 @@ int info_compare_total(const void *item1, const void *item2)
 	return (*info2)->total - (*info1)->total;
 }
 
-void samples_dump(const char *filename)
+static void samples_dump(const char *filename)
 {
 	sample_delta_list_t	*sdl;
 	timer_info_t **sorted_timer_infos;
@@ -197,6 +210,9 @@ void samples_dump(const char *filename)
 	int i = 0;
 	size_t n = timer_info_list.length;
 	FILE *fp;
+
+	if (filename == NULL)
+		return;
 
 	if ((fp = fopen(filename, "w")) == NULL) {
 		fprintf(stderr, "Cannot write to file %s\n", filename);
@@ -258,7 +274,7 @@ void samples_dump(const char *filename)
  *	try to find existing timer info in cache, and to the cache
  *	if it is new.
  */
-timer_info_t *timer_info_find(timer_info_t *info)
+static timer_info_t *timer_info_find(timer_info_t *info)
 {
 	timer_info_item_t *item = timer_info_list.head;
 
@@ -305,7 +321,7 @@ timer_info_t *timer_info_find(timer_info_t *info)
  *  timer_info_free
  *	free up all unique timer infos
  */
-void timer_info_free(void)
+static void timer_info_free(void)
 {
 	timer_info_item_t *item = timer_info_list.head;
 
@@ -324,7 +340,7 @@ void timer_info_free(void)
  *  hash_pjw()
  *	Hash a string, from Aho, Sethi, Ullman, Compiling Techniques.
  */
-unsigned long hash_pjw(char *str)
+static unsigned long hash_pjw(char *str)
 {
   	unsigned long h=0, g;
 
@@ -344,7 +360,7 @@ unsigned long hash_pjw(char *str)
  *  timer_stat_free_contents()
  *	Free timers from a hash table
  */
-void timer_stat_free_contents(
+static void timer_stat_free_contents(
 	timer_stat_t *timer_stats[])	/* timer stat hash table */
 {
 	int i;
@@ -363,7 +379,7 @@ void timer_stat_free_contents(
 }
 
 #if DEBUG_TIMER_STAT_DUMP
-void timer_stat_dump(timer_stat_t *timer_stats[])
+static void timer_stat_dump(timer_stat_t *timer_stats[])
 {
 	int i;
 
@@ -384,7 +400,7 @@ void timer_stat_dump(timer_stat_t *timer_stats[])
  *	add timer stats to a hash table if it is new, otherwise just
  *	accumulate the event count.
  */
-void timer_stat_add(
+static void timer_stat_add(
 	timer_stat_t *timer_stats[],	/* timer stat hash table */
 	unsigned long count,		/* event count */
 	pid_t pid,			/* PID of task */
@@ -434,7 +450,7 @@ void timer_stat_add(
  *  timer_stat_find()
  *	find a timer stat (needle) in a timer stat hash table (haystack)
  */
-timer_stat_t *timer_stat_find(
+static timer_stat_t *timer_stat_find(
 	timer_stat_t *haystack[],	/* timer stat hash table */
 	timer_stat_t *needle)		/* timer stat to find */
 {
@@ -456,7 +472,7 @@ timer_stat_t *timer_stat_find(
  *  timer_stat_sort_freq_add()
  *	add a timer stat to a sorted list of timer stats
  */
-void timer_stat_sort_freq_add(
+static void timer_stat_sort_freq_add(
 	timer_stat_t **sorted,		/* timer stat sorted list */
 	timer_stat_t *new)		/* timer stat to add */
 {
@@ -476,13 +492,13 @@ void timer_stat_sort_freq_add(
  *	stats.  We are interested in just current and new timers, not ones that
  *	silently die
  */
-void timer_stat_diff(
-	const int duration,
-	const int n_lines,
-	unsigned long whence,
-	timer_stat_t *timer_stats_old[],
-	timer_stat_t *timer_stats_new[],
-	unsigned long *total)
+static void timer_stat_diff(
+	const int duration,		/* time between each sample */
+	const int n_lines,		/* number of lines to output */
+	unsigned long whence,		/* nth sample */
+	timer_stat_t *timer_stats_old[],/* old timer stats samples */
+	timer_stat_t *timer_stats_new[],/* new timer stats samples */
+	unsigned long *total)		/* total number of events */
 {
 	int i;
 	int j = 0;
@@ -620,6 +636,10 @@ void set_timer_stat(char *str)
 	fclose(fp);
 }
 
+/*
+ *  show_usage()
+ *	show how to use
+ */
 void show_usage(void)
 {
 	printf("Usage: %s [-r csv_file] [-n event_count] [duration] [count]\n", APP_NAME);
@@ -637,6 +657,7 @@ int main(int argc, char **argv)
 	int n_lines = -1;
 	unsigned long whence = 0;
 	bool forever = true;
+	struct timeval tv1, tv2;
 
 	for (;;) {
 		int c = getopt(argc, argv, "hn:r:");
@@ -682,6 +703,8 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	signal(SIGINT, &handle_sigint);
+
 	/* Should really catch signals and set back to zero before we die */
 	set_timer_stat("1");
 	sleep(1);
@@ -689,13 +712,23 @@ int main(int argc, char **argv)
 	timer_stats_old = calloc(TABLE_SIZE, sizeof(timer_stat_t*));
 	timer_stats_new = calloc(TABLE_SIZE, sizeof(timer_stat_t*));
 
+	gettimeofday(&tv1, NULL);
 	get_events(timer_stats_old);
 
 #if DEBUG_TIMER_STAT_DUMP
 	timer_stat_dump(timer_stats_old);
 #endif
-	while (forever || count--) {
-		sleep(duration);
+	while (!stop_eventstat && (forever || count--)) {
+		suseconds_t usec;
+
+		gettimeofday(&tv2, NULL);
+		usec = ((tv1.tv_sec + whence + duration - tv2.tv_sec) * 1000000) +
+		       (tv1.tv_usec - tv2.tv_usec);
+		tv2.tv_sec = usec / 1000000;
+		tv2.tv_usec = usec % 1000000;
+		
+		select(0, NULL, NULL, NULL, &tv2);
+		
 		get_events(timer_stats_new);
 		timer_stat_diff(duration, n_lines, whence,
 			timer_stats_old, timer_stats_new, &total);

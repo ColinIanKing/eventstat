@@ -1,3 +1,20 @@
+eventstat (0.01.02) precise; urgency=low
+
+    Dump out samples into a CSV file with -r option
+    Add timer info cache, more memory efficient
+    Add help option
+    Add -n option
+    Fix count error message.
+
+ -- Colin King <colin.king@canonical.com>  Sun, 18 Dec 2011 17:11:00 +0000
+
+eventstat (0.01.01) precise; urgency=low
+
+  * Remove trailing ws
+  * Ensure we write to timer_stats correctly
+
+ -- Colin King <colin.king@canonical.com>  Sat, 17 Dec 2011 21:29:00 +0000
+
 eventstat (0.01.00) precise; urgency=low
 
   * Initial version 

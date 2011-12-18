@@ -26,15 +26,17 @@
 
 #define APP_NAME	"eventstat"
 #define TIMER_STATS	"/proc/timer_stats"
-
 #define TABLE_SIZE	(251)		/* Should be a prime */
 
-typedef struct {
+#define DEBUG_TIMER_STAT_DUMP	(0)
+
+typedef struct timer_info {
 	pid_t		pid;
 	char 		*task;		/* Name of process/kernel task */
 	char		*func;		/* Kernel waiting func */
 	char		*timer;		/* Kernel timer */
 	char		*ident;		/* Unique identity */
+	unsigned long	total;		/* Total number of events */
 } timer_info_t;
 
 typedef struct timer_stat {
@@ -44,20 +46,212 @@ typedef struct timer_stat {
 	timer_info_t	*info;		/* Timer info */
 	struct timer_stat *next;	/* Next timer stat in hash table */
 	struct timer_stat *sorted_freq_next;	/* Next timer stat in event frequency sorted list */
-	struct timer_stat *sorted_ident_next;	/* Next timer stat in ident sorted list */
 } timer_stat_t;
 
+/* timer info item as an element of the timer_info_list_t */
 typedef struct timer_info_item {
-	timer_info_t		info;
-	struct timer_info_item	*next;
+	timer_info_t		info;	/* Timer info */
+	struct timer_info_item	*next;	/* Next timer info in list */
 } timer_info_item_t;
 
+/* list of timer_info_item_t elements */
 typedef struct {
-	timer_info_item_t	*head;
-	timer_info_item_t	*tail;
+	timer_info_item_t	*head;	/* list head */
+	timer_info_item_t	*tail;	/* list tail */
+	size_t			length;	/* length of list */
 } timer_info_list_t;
 
-timer_info_list_t timer_info_list;	/* cache list of timer_info */
+/* sample delta item as an element of the sample_delta_list_t */
+typedef struct sample_delta_item {
+	unsigned long	delta;		/* difference in timer events between old and new */
+	timer_info_t	*info;		/* timer this refers to */
+	struct sample_delta_item *next;	/* next sample delta item in the list */
+} sample_delta_item_t;
+
+/* list of sample_delta_items */
+typedef struct sample_delta_list {
+	unsigned long		whence;	/* when the sample was taken */
+	sample_delta_item_t	*head;	/* list head */
+	sample_delta_item_t	*tail;	/* list tail */
+	struct sample_delta_list *next;	/* next sample_delta_list */
+} sample_delta_list_t;
+
+/* list of sample_delta_list_t items */
+typedef struct {
+	sample_delta_list_t	*head;	/* head */
+	sample_delta_list_t	*tail;	/* tail */
+} sample_list_t;
+
+static timer_info_list_t timer_info_list;	/* cache list of timer_info */
+static sample_list_t	  sample_list;		/* list of samples, sorted in sample time order */
+static char *csv_results;			/* results in comma separated values */
+
+/*
+ *  samples_free()
+ *	free collected samples
+ */
+void samples_free(void)
+{
+	sample_delta_list_t *sdl = sample_list.head;
+
+	while (sdl) {
+		sample_delta_list_t *sdl_next = sdl->next;
+		sample_delta_item_t *sdi = sdl->head;
+
+		while (sdi) {
+			sample_delta_item_t *sdi_next = sdi->next;
+			free(sdi);
+			sdi = sdi_next;
+		}
+		free(sdl);
+		sdl = sdl_next;
+	}
+}
+
+/*
+ *  sample_add()
+ *	add a timer_stat's delta and info field to a list at time position whence
+ */
+void sample_add(timer_stat_t *timer_stat, unsigned long whence)
+{
+	sample_delta_list_t *sdl = sample_list.head;
+	sample_delta_item_t *sdi;
+
+	if (csv_results == NULL)	/* No need if not request */
+		return;
+
+	for (sdl = sample_list.head; sdl; sdl = sdl->next)
+		if (sdl->whence == whence)
+			break;
+
+	/*
+	 * New time period, need new sdl, we assume it goes at the end of the
+	 * list since time is assumed to be increasing
+	 */
+	if (sdl == NULL) {
+		if ((sdl = calloc(1, sizeof(sample_delta_list_t))) == NULL) {
+			fprintf(stderr, "Cannot allocate sample delta list\n");
+			exit(EXIT_FAILURE);
+		}
+		sdl->whence = whence;
+
+		if (sample_list.head == NULL) {
+			sample_list.head = sdl;
+			sample_list.tail = sdl;
+		} else {
+			sample_list.tail->next = sdl;
+			sample_list.tail = sdl;
+		}
+	}
+
+	/* Now append the sdi onto the list */
+	if ((sdi = calloc(1, sizeof(sample_delta_item_t))) == NULL) {
+		fprintf(stderr, "Cannot allocate sample delta item\n");
+		exit(EXIT_FAILURE);
+	}
+	sdi->delta = timer_stat->delta;
+	sdi->info  = timer_stat->info;
+
+	if (sdl->head == NULL) {
+		sdl->head = sdi;
+		sdl->tail = sdi;
+	} else {
+		sdl->tail->next = sdi;
+		sdl->tail = sdi;
+	}
+}
+
+/*
+ *  sample_find()
+ *	scan through a sample_delta_list for timer info, return NULL if not found
+ */
+sample_delta_item_t inline *sample_find(sample_delta_list_t *sdl, timer_info_t *info)
+{
+	sample_delta_item_t	*sdi = sdl->head;
+
+	while (sdi) {
+		if (sdi->info == info)
+			return sdi;
+		sdi = sdi->next;
+	}
+	return NULL;
+}
+
+/*
+ * info_compare_total()
+ *	used by qsort to sort array in sample event total order
+ */
+int info_compare_total(const void *item1, const void *item2)
+{
+	timer_info_t **info1 = (timer_info_t **)item1;
+	timer_info_t **info2 = (timer_info_t **)item2;
+
+	return (*info2)->total - (*info1)->total;
+}
+
+void samples_dump(const char *filename)
+{
+	sample_delta_list_t	*sdl;
+	timer_info_t **sorted_timer_infos;
+	timer_info_item_t *item = timer_info_list.head;
+	int i = 0;
+	size_t n = timer_info_list.length;
+	FILE *fp;
+
+	if ((fp = fopen(filename, "w")) == NULL) {
+		fprintf(stderr, "Cannot write to file %s\n", filename);
+		return;
+	}
+
+	if ((sorted_timer_infos = calloc(n, sizeof(timer_info_t*))) == NULL) {
+		fprintf(stderr, "Cannot allocate buffer for sorting timer_infos\n");
+		exit(EXIT_FAILURE);
+	}
+
+	/* Just want the timers with some non-zero total */
+	for (n = 0, item = timer_info_list.head; item; item = item->next)
+		if (item->info.total > 0)
+			sorted_timer_infos[n++] = &item->info;
+
+	qsort(sorted_timer_infos, n, sizeof(timer_info_t *), info_compare_total);
+
+	fprintf(fp, "Task:");
+	for (i=0; i<n; i++)
+		fprintf(fp, ",%s", sorted_timer_infos[i]->task);
+	fprintf(fp, "\n");
+
+	fprintf(fp, "Func:");
+	for (i=0; i<n; i++)
+		fprintf(fp, ",%s", sorted_timer_infos[i]->func);
+	fprintf(fp, "\n");
+
+	fprintf(fp, "Timer:");
+	for (i=0; i<n; i++)
+		fprintf(fp, ",%s", sorted_timer_infos[i]->timer);
+	fprintf(fp, "\n");
+
+	fprintf(fp, "Total:");
+	for (i=0; i<n; i++)
+		fprintf(fp, ",%lu", sorted_timer_infos[i]->total);
+	fprintf(fp, "\n");
+
+	for (sdl = sample_list.head; sdl; sdl = sdl->next) {
+		fprintf(fp, "%lu", sdl->whence);
+
+		/* Scan in timer info order to be consistent for all sdl rows */
+		for (i=0; i<n; i++) {
+			sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
+			if (sdi)
+				fprintf(fp,",%lu", sdi->delta);
+			else
+				fprintf(fp,",");
+		}
+		fprintf(fp, "\n");
+	}
+
+	free(sorted_timer_infos);
+	fclose(fp);
+}
 
 /*
  *  timer_info_find()
@@ -69,7 +263,7 @@ timer_info_t *timer_info_find(timer_info_t *info)
 	timer_info_item_t *item = timer_info_list.head;
 
 	while (item) {
-		if (strcmp(info->ident, item->info.ident) == 0) 
+		if (strcmp(info->ident, item->info.ident) == 0)
 			return &item->info;
 		item = item->next;
 	}
@@ -101,6 +295,9 @@ timer_info_t *timer_info_find(timer_info_t *info)
 		timer_info_list.tail->next = item;
 		timer_info_list.tail = item;
 	}
+
+	timer_info_list.length++;
+
 	return &item->info;
 }
 
@@ -165,6 +362,23 @@ void timer_stat_free_contents(
 	}
 }
 
+#if DEBUG_TIMER_STAT_DUMP
+void timer_stat_dump(timer_stat_t *timer_stats[])
+{
+	int i;
+
+	printf("Timer stat dump:\n");
+
+	for (i=0; i<TABLE_SIZE; i++) {
+		timer_stat_t *ts = timer_stats[i];
+		while (ts) {
+			printf("%d : %s\n",i, ts->info->ident);
+			ts = ts->next;
+		}
+	}
+}
+#endif
+
 /*
  *  timer_stat_add()
  *	add timer stats to a hash table if it is new, otherwise just
@@ -188,7 +402,7 @@ void timer_stat_add(
 	h = hash_pjw(buf);
 	ts = timer_stats[h];
 
-	while (ts != NULL) {
+	while (ts) {
 		if (strcmp(ts->info->ident, buf) == 0) {
 			ts->count += count;
 			return;
@@ -208,13 +422,10 @@ void timer_stat_add(
 	info.timer = timer;
 	info.ident = buf;
 
-
 	ts_new->count  = count;
 	ts_new->info = timer_info_find(&info);
 	ts_new->next  = timer_stats[h];
 	ts_new->sorted_freq_next = NULL;
-	ts_new->sorted_ident_next = NULL;
-
 
 	timer_stats[h] = ts_new;
 }
@@ -234,10 +445,10 @@ timer_stat_t *timer_stat_find(
 		needle->info->pid, needle->info->task,
 		needle->info->func, needle->info->timer);
 
-	for (ts = haystack[hash_pjw(buf)]; ts; ts = ts->next) {
+	for (ts = haystack[hash_pjw(buf)]; ts; ts = ts->next)
 		if (strcmp(ts->info->ident, buf) == 0)
 			return ts;
-	}
+
 	return NULL;	/* no success */
 }
 
@@ -260,24 +471,6 @@ void timer_stat_sort_freq_add(
 }
 
 /*
- *  timer_stat_sort_ident_add()
- *	add a timer stat to a sorted list of timer stats
- */
-void timer_stat_sort_ident_add(
-	timer_stat_t **sorted,		/* timer stat sorted list */
-	timer_stat_t *new)		/* timer stat to add */
-{
-	while (*sorted != NULL) {
-		if (strcmp((*sorted)->info->ident, new->info->ident) < 0) {
-			new->sorted_ident_next = *(sorted);
-			break;
-		}
-		sorted = &(*sorted)->sorted_ident_next;
-	}
-	*sorted = new;
-}
-
-/*
  *  timer_stat_diff()
  *	find difference in event count between to hash table samples of timer
  *	stats.  We are interested in just current and new timers, not ones that
@@ -286,6 +479,7 @@ void timer_stat_sort_ident_add(
 void timer_stat_diff(
 	const int duration,
 	const int n_lines,
+	unsigned long whence,
 	timer_stat_t *timer_stats_old[],
 	timer_stat_t *timer_stats_new[],
 	unsigned long *total)
@@ -305,11 +499,14 @@ void timer_stat_diff(
 				if (ts->delta) {
 					ts->old = true;
 					timer_stat_sort_freq_add(&sorted, ts);
+					sample_add(ts, whence);
+					found->info->total += ts->delta;
 				}
 			} else {
 				ts->delta = 0;
 				ts->old = false;
 				timer_stat_sort_freq_add(&sorted, ts);
+				sample_add(ts, whence);
 			}
 			ts = ts->next;
 		}
@@ -425,9 +622,10 @@ void set_timer_stat(char *str)
 
 void show_usage(void)
 {
-	printf("Usage: %s [-n event_count] [duration] [count]\n", APP_NAME);
+	printf("Usage: %s [-r csv_file] [-n event_count] [duration] [count]\n", APP_NAME);
 	printf("\t-h help\n");
 	printf("\t-n specifies number of events to display\n");
+	printf("\t-r specify a comma separated values output file to dump samples into.\n");
 }
 
 int main(int argc, char **argv)
@@ -437,10 +635,11 @@ int main(int argc, char **argv)
 	int duration = 1;
 	int count = 1;
 	int n_lines = -1;
+	unsigned long whence = 0;
 	bool forever = true;
 
 	for (;;) {
-		int c = getopt(argc, argv, "hn:");
+		int c = getopt(argc, argv, "hn:r:");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -453,6 +652,9 @@ int main(int argc, char **argv)
 				fprintf(stderr, "-n option must be greater than 0\n");
 				exit(EXIT_FAILURE);
 			}
+			break;
+		case 'r':
+			csv_results = optarg;
 			break;
 		}
 	}
@@ -482,16 +684,20 @@ int main(int argc, char **argv)
 
 	/* Should really catch signals and set back to zero before we die */
 	set_timer_stat("1");
+	sleep(1);
 
 	timer_stats_old = calloc(TABLE_SIZE, sizeof(timer_stat_t*));
 	timer_stats_new = calloc(TABLE_SIZE, sizeof(timer_stat_t*));
 
 	get_events(timer_stats_old);
 
+#if DEBUG_TIMER_STAT_DUMP
+	timer_stat_dump(timer_stats_old);
+#endif
 	while (forever || count--) {
 		sleep(duration);
 		get_events(timer_stats_new);
-		timer_stat_diff(duration, n_lines,
+		timer_stat_diff(duration, n_lines, whence,
 			timer_stats_old, timer_stats_new, &total);
 		timer_stat_free_contents(timer_stats_old);
 
@@ -501,13 +707,17 @@ int main(int argc, char **argv)
 
 		printf("%lu Total events, %5.2f events/sec\n\n",
 			total, (double)total / duration);
+
+		whence += duration;
 	}
+
+	samples_dump(csv_results);
 
 	timer_stat_free_contents(timer_stats_old);
 	timer_stat_free_contents(timer_stats_new);
 	free(timer_stats_old);
 	free(timer_stats_new);
-
+	samples_free();
 	timer_info_free();
 
 	set_timer_stat("0");

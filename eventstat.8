@@ -21,7 +21,7 @@ eventstat \- a tool to measure system events.
 
 .SH SYNOPSIS
 .B eventstat
-.RI [-n event_count] [ delay " [count]]
+.RI [ \-r csv_file] [\-n event_count] [ delay " [count]]
 .br
 
 .SH DESCRIPTION
@@ -35,6 +35,11 @@ show help
 .TP
 .B \-n event_count
 only display the first event_count number of top events.
+.TP
+.B \-r csv_file
+output gathered data in a comma separated values file. This
+can be then imported and graphed using your favourite open
+source spread sheet.
 
 .SH EXAMPLES
 .LP

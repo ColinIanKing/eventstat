@@ -80,6 +80,7 @@ static list_t timer_info_list;			/* cache list of timer_info */
 static list_t sample_list;			/* list of samples, sorted in sample time order */
 static char *csv_results;			/* results in comma separated values */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
+static unsigned long opt_threshold;		/* ignore samples with event delta less than this */
 
 static inline void list_init(list_t *list)
 {
@@ -533,7 +534,7 @@ static void timer_stat_diff(
 				timer_stat_find(timer_stats_old, ts);
 			if (found) {
 				ts->delta = ts->count - found->count;
-				if (ts->delta) {
+				if (ts->delta >= opt_threshold) {
 					ts->old = true;
 					timer_stat_sort_freq_add(&sorted, ts);
 					sample_add(ts, whence);
@@ -541,9 +542,11 @@ static void timer_stat_diff(
 				}
 			} else {
 				ts->delta = 0;
-				ts->old = false;
-				timer_stat_sort_freq_add(&sorted, ts);
-				sample_add(ts, whence);
+				if (ts->delta >= opt_threshold) {
+					ts->old = false;
+					timer_stat_sort_freq_add(&sorted, ts);
+					sample_add(ts, whence);
+				}
 			}
 			ts = ts->next;
 		}
@@ -681,7 +684,7 @@ int main(int argc, char **argv)
 	struct timeval tv1, tv2;
 
 	for (;;) {
-		int c = getopt(argc, argv, "hn:r:");
+		int c = getopt(argc, argv, "hn:r:t:");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -692,6 +695,13 @@ int main(int argc, char **argv)
 			n_lines = atoi(optarg);
 			if (n_lines < 1) {
 				fprintf(stderr, "-n option must be greater than 0\n");
+				exit(EXIT_FAILURE);
+			}
+			break;
+		case 't':
+			opt_threshold = strtoull(optarg, NULL, 10);
+			if (opt_threshold < 1) {
+				fprintf(stderr, "-t threshold must be 1 or more.\n");
 				exit(EXIT_FAILURE);
 			}
 			break;
@@ -717,6 +727,8 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 	}
+
+	opt_threshold *= duration;
 
 	if (geteuid() != 0) {
 		fprintf(stderr, "%s requires root privileges to write to %s\n",

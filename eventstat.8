@@ -40,7 +40,9 @@ only display the first event_count number of top events.
 output gathered data in a comma separated values file. This
 can be then imported and graphed using your favourite open
 source spread sheet.
-
+.TP
+.B \-t threshold
+ignore samples where the event delta per second less than the given threshold
 .SH EXAMPLES
 .LP
 Dump events every second until stopped.

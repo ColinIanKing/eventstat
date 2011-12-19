@@ -33,6 +33,19 @@
 
 #define DEBUG_TIMER_STAT_DUMP	(0)
 
+typedef struct link {
+	void *data;
+	struct link *next;
+} link_t;
+
+typedef struct {
+	link_t	*head;
+	link_t	*tail;
+	size_t	length;
+} list_t;
+
+typedef void (*list_link_free_t)(void *);
+
 typedef struct timer_info {
 	pid_t		pid;
 	char 		*task;		/* Name of process/kernel task */
@@ -50,19 +63,6 @@ typedef struct timer_stat {
 	struct timer_stat *next;	/* Next timer stat in hash table */
 	struct timer_stat *sorted_freq_next;	/* Next timer stat in event frequency sorted list */
 } timer_stat_t;
-
-/* timer info item as an element of the timer_info_list_t */
-typedef struct timer_info_item {
-	timer_info_t		info;	/* Timer info */
-	struct timer_info_item	*next;	/* Next timer info in list */
-} timer_info_item_t;
-
-/* list of timer_info_item_t elements */
-typedef struct {
-	timer_info_item_t	*head;	/* list head */
-	timer_info_item_t	*tail;	/* list tail */
-	size_t			length;	/* length of list */
-} timer_info_list_t;
 
 /* sample delta item as an element of the sample_delta_list_t */
 typedef struct sample_delta_item {
@@ -85,10 +85,54 @@ typedef struct {
 	sample_delta_list_t	*tail;	/* tail */
 } sample_list_t;
 
-static timer_info_list_t timer_info_list;	/* cache list of timer_info */
+static list_t timer_info_list;			/* cache list of timer_info */
 static sample_list_t sample_list;		/* list of samples, sorted in sample time order */
 static char *csv_results;			/* results in comma separated values */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
+
+static inline void list_init(list_t *list)
+{
+	list->head = NULL;
+	list->tail = NULL;
+	list->length = 0;
+}
+
+static link_t *list_append(list_t *list, void *data)
+{
+	link_t *link;
+
+	if ((link = calloc(sizeof(link_t), 1)) == NULL) {
+		fprintf(stderr, "Cannot allocate list link\n");
+		exit(EXIT_FAILURE);
+	}
+	link->data = data;
+	
+	if (list->head == NULL) {
+		list->head = link;
+		list->tail = link;
+	} else {
+		list->tail->next = link;
+		list->tail = link;
+	}
+	list->length++;
+
+	return link;
+}
+
+static void list_free(list_t *list, list_link_free_t freefunc)
+{
+	link_t	*link, *next;
+
+	if (list == NULL)
+		return;
+
+	for (link = list->head; link; link = next) {
+		next = link->next;
+		if (link->data && freefunc) 
+			freefunc(link->data);
+		free(link);
+	}
+}
 
 /*
  *  handle_sigint()
@@ -206,7 +250,8 @@ static void samples_dump(const char *filename)
 {
 	sample_delta_list_t	*sdl;
 	timer_info_t **sorted_timer_infos;
-	timer_info_item_t *item = timer_info_list.head;
+	link_t	*link;
+	//timer_info_item_t *item = timer_info_list.head;
 	int i = 0;
 	size_t n = timer_info_list.length;
 	FILE *fp;
@@ -225,9 +270,11 @@ static void samples_dump(const char *filename)
 	}
 
 	/* Just want the timers with some non-zero total */
-	for (n = 0, item = timer_info_list.head; item; item = item->next)
-		if (item->info.total > 0)
-			sorted_timer_infos[n++] = &item->info;
+	for (n = 0, link = timer_info_list.head; link; link = link->next) {
+		timer_info_t *info = (timer_info_t*)link->data;
+		if (info->total > 0)
+			sorted_timer_infos[n++] = info;
+	}
 
 	qsort(sorted_timer_infos, n, sizeof(timer_info_t *), info_compare_total);
 
@@ -274,66 +321,61 @@ static void samples_dump(const char *filename)
  *	try to find existing timer info in cache, and to the cache
  *	if it is new.
  */
-static timer_info_t *timer_info_find(timer_info_t *info)
+static timer_info_t *timer_info_find(timer_info_t *new_info)
 {
-	timer_info_item_t *item = timer_info_list.head;
+	link_t *link;
+	timer_info_t *info;
 
-	while (item) {
-		if (strcmp(info->ident, item->info.ident) == 0)
-			return &item->info;
-		item = item->next;
+	for (link = timer_info_list.head; link; link = link->next) {
+		info = (timer_info_t*)link->data;
+		if (strcmp(new_info->ident, info->ident) == 0)
+			return info;
 	}
-	if ((item = calloc(1, sizeof(timer_info_item_t))) == NULL) {
+
+	if ((info = calloc(1, sizeof(timer_info_t))) == NULL) {
 		fprintf(stderr, "Cannot allocate timer info\n");
 		exit(EXIT_FAILURE);
 	}
 
-	item->info.pid = info->pid;
-	item->info.task = strdup(info->task);
-	item->info.func = strdup(info->func);
-	item->info.timer = strdup(info->timer);
-	item->info.ident = strdup(info->ident);
+	info->pid = new_info->pid;
+	info->task = strdup(new_info->task);
+	info->func = strdup(new_info->func);
+	info->timer = strdup(new_info->timer);
+	info->ident = strdup(new_info->ident);
 
-	if (item->info.task == NULL ||
-	    item->info.func == NULL ||
-	    item->info.timer == NULL ||
-	    item->info.ident == NULL) {
+	if (info->task == NULL ||
+	    info->func == NULL ||
+	    info->timer == NULL ||
+	    info->ident == NULL) {
 		fprintf(stderr, "Out of memory allocating a timer stat fields\n");
 		exit(1);
 	}
 
 	/* Does not exist in list, append it */
 
-	if (timer_info_list.head == NULL) {
-		timer_info_list.head = item;
-		timer_info_list.tail = item;
-	} else {
-		timer_info_list.tail->next = item;
-		timer_info_list.tail = item;
-	}
+	list_append(&timer_info_list, info);
 
-	timer_info_list.length++;
+	return info;
+}
 
-	return &item->info;
+static void timer_info_free(void *data)
+{
+	timer_info_t *info = (timer_info_t*)data;
+
+	free(info->task);
+	free(info->func);
+	free(info->timer);
+	free(info->ident);
+	free(info);
 }
 
 /*
  *  timer_info_free
  *	free up all unique timer infos
  */
-static void timer_info_free(void)
+static void timer_info_list_free(void)
 {
-	timer_info_item_t *item = timer_info_list.head;
-
-	while (item) {
-		timer_info_item_t *next = item->next;
-		free(item->info.task);
-		free(item->info.func);
-		free(item->info.timer);
-		free(item->info.ident);
-		free(item);
-		item = next;
-	}
+	list_free(&timer_info_list, timer_info_free);
 }
 
 /*
@@ -751,7 +793,7 @@ int main(int argc, char **argv)
 	free(timer_stats_old);
 	free(timer_stats_new);
 	samples_free();
-	timer_info_free();
+	timer_info_list_free();
 
 	set_timer_stat("0");
 

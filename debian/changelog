@@ -1,3 +1,12 @@
+eventstat (0.01.04) precise; urgency=low
+
+  * Output events per second in .csv results
+  * Add -t threshold option
+  * Convert to use generic lists, phase 2
+  * Introduce generic lists
+
+ -- Colin King <colin.king@canonical.com>  Mon, 19 Dec 2011 10:40:00 +0000
+
 eventstat (0.01.03) precise; urgency=low
 
   * Stop on SIGINT, handle timing more accurately

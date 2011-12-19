@@ -68,25 +68,16 @@ typedef struct timer_stat {
 typedef struct sample_delta_item {
 	unsigned long	delta;		/* difference in timer events between old and new */
 	timer_info_t	*info;		/* timer this refers to */
-	struct sample_delta_item *next;	/* next sample delta item in the list */
 } sample_delta_item_t;
 
 /* list of sample_delta_items */
 typedef struct sample_delta_list {
 	unsigned long		whence;	/* when the sample was taken */
-	sample_delta_item_t	*head;	/* list head */
-	sample_delta_item_t	*tail;	/* list tail */
-	struct sample_delta_list *next;	/* next sample_delta_list */
+	list_t			list;
 } sample_delta_list_t;
 
-/* list of sample_delta_list_t items */
-typedef struct {
-	sample_delta_list_t	*head;	/* head */
-	sample_delta_list_t	*tail;	/* tail */
-} sample_list_t;
-
 static list_t timer_info_list;			/* cache list of timer_info */
-static sample_list_t sample_list;		/* list of samples, sorted in sample time order */
+static list_t sample_list;			/* list of samples, sorted in sample time order */
 static char *csv_results;			/* results in comma separated values */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
 
@@ -143,26 +134,21 @@ static void handle_sigint(int dummy)
 	stop_eventstat = true;
 }
 
+static void sample_delta_free(void *data)
+{
+	sample_delta_list_t *sdl = (sample_delta_list_t*)data;
+
+	list_free(&sdl->list, free);
+	free(sdl);
+}
+
 /*
  *  samples_free()
  *	free collected samples
  */
 static void samples_free(void)
 {
-	sample_delta_list_t *sdl = sample_list.head;
-
-	while (sdl) {
-		sample_delta_list_t *sdl_next = sdl->next;
-		sample_delta_item_t *sdi = sdl->head;
-
-		while (sdi) {
-			sample_delta_item_t *sdi_next = sdi->next;
-			free(sdi);
-			sdi = sdi_next;
-		}
-		free(sdl);
-		sdl = sdl_next;
-	}
+	list_free(&sample_list, sample_delta_free);
 }
 
 /*
@@ -171,34 +157,33 @@ static void samples_free(void)
  */
 static void sample_add(timer_stat_t *timer_stat, unsigned long whence)
 {
-	sample_delta_list_t *sdl = sample_list.head;
+	link_t	*link;
+	bool	found = false;
+	sample_delta_list_t *sdl = NULL;
 	sample_delta_item_t *sdi;
 
 	if (csv_results == NULL)	/* No need if not request */
 		return;
 
-	for (sdl = sample_list.head; sdl; sdl = sdl->next)
-		if (sdl->whence == whence)
+	for (link = sample_list.head; link; link = link->next) {
+		sdl = (sample_delta_list_t*)link->data;
+		if (sdl->whence == whence) {	
+			found = true;
 			break;
+		}
+	}
 
 	/*
 	 * New time period, need new sdl, we assume it goes at the end of the
 	 * list since time is assumed to be increasing
 	 */
-	if (sdl == NULL) {
+	if (!found) {
 		if ((sdl = calloc(1, sizeof(sample_delta_list_t))) == NULL) {
 			fprintf(stderr, "Cannot allocate sample delta list\n");
 			exit(EXIT_FAILURE);
 		}
 		sdl->whence = whence;
-
-		if (sample_list.head == NULL) {
-			sample_list.head = sdl;
-			sample_list.tail = sdl;
-		} else {
-			sample_list.tail->next = sdl;
-			sample_list.tail = sdl;
-		}
+		list_append(&sample_list, sdl);
 	}
 
 	/* Now append the sdi onto the list */
@@ -209,13 +194,7 @@ static void sample_add(timer_stat_t *timer_stat, unsigned long whence)
 	sdi->delta = timer_stat->delta;
 	sdi->info  = timer_stat->info;
 
-	if (sdl->head == NULL) {
-		sdl->head = sdi;
-		sdl->tail = sdi;
-	} else {
-		sdl->tail->next = sdi;
-		sdl->tail = sdi;
-	}
+	list_append(&sdl->list, sdi);
 }
 
 /*
@@ -224,12 +203,12 @@ static void sample_add(timer_stat_t *timer_stat, unsigned long whence)
  */
 static sample_delta_item_t inline *sample_find(sample_delta_list_t *sdl, timer_info_t *info)
 {
-	sample_delta_item_t	*sdi = sdl->head;
+	link_t *link;
 
-	while (sdi) {
+	for (link = sdl->list.head; link; link = link->next) {
+		sample_delta_item_t *sdi = (sample_delta_item_t*)link->data;
 		if (sdi->info == info)
 			return sdi;
-		sdi = sdi->next;
 	}
 	return NULL;
 }
@@ -251,7 +230,6 @@ static void samples_dump(const char *filename)
 	sample_delta_list_t	*sdl;
 	timer_info_t **sorted_timer_infos;
 	link_t	*link;
-	//timer_info_item_t *item = timer_info_list.head;
 	int i = 0;
 	size_t n = timer_info_list.length;
 	FILE *fp;
@@ -298,7 +276,8 @@ static void samples_dump(const char *filename)
 		fprintf(fp, ",%lu", sorted_timer_infos[i]->total);
 	fprintf(fp, "\n");
 
-	for (sdl = sample_list.head; sdl; sdl = sdl->next) {
+	for (link = sample_list.head; link; link = link->next) {
+		sdl = (sample_delta_list_t*)link->data;
 		fprintf(fp, "%lu", sdl->whence);
 
 		/* Scan in timer info order to be consistent for all sdl rows */

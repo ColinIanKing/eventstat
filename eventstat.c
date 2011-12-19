@@ -226,7 +226,7 @@ static int info_compare_total(const void *item1, const void *item2)
 	return (*info2)->total - (*info1)->total;
 }
 
-static void samples_dump(const char *filename)
+static void samples_dump(const char *filename, const int duration)
 {
 	sample_delta_list_t	*sdl;
 	timer_info_t **sorted_timer_infos;
@@ -285,7 +285,7 @@ static void samples_dump(const char *filename)
 		for (i=0; i<n; i++) {
 			sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 			if (sdi)
-				fprintf(fp,",%lu", sdi->delta);
+				fprintf(fp,",%f", (double)sdi->delta / (double)duration);
 			else
 				fprintf(fp,",");
 		}
@@ -561,7 +561,7 @@ static void timer_stat_diff(
 			j++;
 			printf("%1s %6.2f %5d %-15s %-25s %-s\n",
 				sorted->old ? " " : "N",
-				(double)sorted->delta / duration,
+				(double)sorted->delta / (double)duration,
 				sorted->info->pid, sorted->info->task,
 				sorted->info->func, sorted->info->timer);
 		}
@@ -777,7 +777,7 @@ int main(int argc, char **argv)
 		whence += duration;
 	}
 
-	samples_dump(csv_results);
+	samples_dump(csv_results, duration);
 
 	timer_stat_free_contents(timer_stats_old);
 	timer_stat_free_contents(timer_stats_new);

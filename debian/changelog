@@ -1,3 +1,9 @@
+eventstat (0.01.05) precise; urgency=low
+
+  * Add -q quiet option
+
+ -- Colin King <colin.king@canonical.com>  Tue, 20 Dec 2011 00:43:00 +0000
+
 eventstat (0.01.04) precise; urgency=low
 
   * Output events per second in .csv results

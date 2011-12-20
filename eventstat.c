@@ -31,6 +31,8 @@
 #define TIMER_STATS	"/proc/timer_stats"
 #define TABLE_SIZE	(251)		/* Should be a prime */
 
+#define OPT_QUIET	(0x00000001)
+
 #define DEBUG_TIMER_STAT_DUMP	(0)
 
 typedef struct link {
@@ -81,6 +83,7 @@ static list_t sample_list;			/* list of samples, sorted in sample time order */
 static char *csv_results;			/* results in comma separated values */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
 static unsigned long opt_threshold;		/* ignore samples with event delta less than this */
+static unsigned int opt_flags;			/* option flags */
 
 static inline void list_init(list_t *list)
 {
@@ -519,11 +522,11 @@ static void timer_stat_diff(
 	const int n_lines,		/* number of lines to output */
 	unsigned long whence,		/* nth sample */
 	timer_stat_t *timer_stats_old[],/* old timer stats samples */
-	timer_stat_t *timer_stats_new[],/* new timer stats samples */
-	unsigned long *total)		/* total number of events */
+	timer_stat_t *timer_stats_new[])/* new timer stats samples */
 {
 	int i;
 	int j = 0;
+	unsigned long total = 0UL;
 
 	timer_stat_t *sorted = NULL;
 
@@ -552,21 +555,24 @@ static void timer_stat_diff(
 		}
 	}
 
-	*total = 0UL;
+	if (!(opt_flags & OPT_QUIET)) {
+		printf("%1s %6s %-5s %-15s %-25s %-s\n",
+			"", "Evnt/s", "PID", "Task", "Func", "Timer");
 
-	printf("%1s %6s %-5s %-15s %-25s %-s\n",
-		"", "Evnt/s", "PID", "Task", "Func", "Timer");
-	while (sorted) {
-		if ((n_lines == -1) || (j < n_lines)) {
-			j++;
-			printf("%1s %6.2f %5d %-15s %-25s %-s\n",
-				sorted->old ? " " : "N",
-				(double)sorted->delta / (double)duration,
-				sorted->info->pid, sorted->info->task,
-				sorted->info->func, sorted->info->timer);
+		while (sorted) {
+			if ((n_lines == -1) || (j < n_lines)) {
+				j++;
+				printf("%1s %6.2f %5d %-15s %-25s %-s\n",
+					sorted->old ? " " : "N",
+					(double)sorted->delta / (double)duration,
+					sorted->info->pid, sorted->info->task,
+					sorted->info->func, sorted->info->timer);
+			}
+			total += sorted->delta;
+			sorted = sorted->sorted_freq_next;
 		}
-		*total += sorted->delta;
-		sorted = sorted->sorted_freq_next;
+		printf("%lu Total events, %5.2f events/sec\n\n",
+			total, (double)total / duration);
 	}
 }
 
@@ -666,16 +672,17 @@ void set_timer_stat(char *str)
  */
 void show_usage(void)
 {
-	printf("Usage: %s [-r csv_file] [-n event_count] [duration] [count]\n", APP_NAME);
+	printf("Usage: %s [-q] [-r csv_file] [-n event_count] [duration] [count]\n", APP_NAME);
 	printf("\t-h help\n");
 	printf("\t-n specifies number of events to display\n");
-	printf("\t-r specify a comma separated values output file to dump samples into.\n");
+	printf("\t-q run quietly, useful with option -r\n");
+	printf("\t-r specifies a comma separated values output file to dump samples into.\n");
+	printf("\t-t specifies an event threshold where samples less than this are ignored.\n");
 }
 
 int main(int argc, char **argv)
 {
 	timer_stat_t **timer_stats_old, **timer_stats_new, **tmp;
-	unsigned long total;
 	int duration = 1;
 	int count = 1;
 	int n_lines = -1;
@@ -684,7 +691,7 @@ int main(int argc, char **argv)
 	struct timeval tv1, tv2;
 
 	for (;;) {
-		int c = getopt(argc, argv, "hn:r:t:");
+		int c = getopt(argc, argv, "hn:qr:t:");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -704,6 +711,9 @@ int main(int argc, char **argv)
 				fprintf(stderr, "-t threshold must be 1 or more.\n");
 				exit(EXIT_FAILURE);
 			}
+			break;
+		case 'q':
+			opt_flags |= OPT_QUIET;
 			break;
 		case 'r':
 			csv_results = optarg;
@@ -764,15 +774,12 @@ int main(int argc, char **argv)
 		
 		get_events(timer_stats_new);
 		timer_stat_diff(duration, n_lines, whence,
-			timer_stats_old, timer_stats_new, &total);
+			timer_stats_old, timer_stats_new);
 		timer_stat_free_contents(timer_stats_old);
 
 		tmp             = timer_stats_old;
 		timer_stats_old = timer_stats_new;
 		timer_stats_new = tmp;
-
-		printf("%lu Total events, %5.2f events/sec\n\n",
-			total, (double)total / duration);
 
 		whence += duration;
 	}

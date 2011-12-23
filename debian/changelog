@@ -1,3 +1,9 @@
+eventstat (0.01.06) precise; urgency=low
+
+  * fix cut and paste error in man page
+
+ -- Colin King <colin.king@canonical.com>  Fri, 23 Dec 2011 20:36:00 +0000
+
 eventstat (0.01.05) precise; urgency=low
 
   * Add -q quiet option

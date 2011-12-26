@@ -1,3 +1,9 @@
+eventstat (0.01.07) precise; urgency=low
+
+  * Add in list init calls
+
+ -- Colin King <colin.king@canonical.com>  Mon, 26 Dec 2011 10:16:00 +0000
+
 eventstat (0.01.06) precise; urgency=low
 
   * fix cut and paste error in man page

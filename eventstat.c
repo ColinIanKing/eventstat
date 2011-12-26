@@ -690,6 +690,9 @@ int main(int argc, char **argv)
 	bool forever = true;
 	struct timeval tv1, tv2;
 
+	list_init(&timer_info_list);
+	list_init(&sample_list);
+
 	for (;;) {
 		int c = getopt(argc, argv, "hn:qr:t:");
 		if (c == -1)

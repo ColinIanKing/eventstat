@@ -412,9 +412,9 @@ static void timer_stat_dump(timer_stat_t *timer_stats[])
 
 	for (i=0; i<TABLE_SIZE; i++) {
 		timer_stat_t *ts = timer_stats[i];
-		while (ts) {
+
+		for (ts = timer_stats[i]; ts; ts = ts->next) {
 			printf("%d : %s\n",i, ts->info->ident);
-			ts = ts->next;
 		}
 	}
 }
@@ -443,12 +443,11 @@ static void timer_stat_add(
 	h = hash_pjw(buf);
 	ts = timer_stats[h];
 
-	while (ts) {
+	for (ts = timer_stats[h]; ts; ts = ts->next) {
 		if (strcmp(ts->info->ident, buf) == 0) {
 			ts->count += count;
 			return;
 		}
-		ts = ts->next;
 	}
 	/* Not found, it is new! */
 
@@ -501,7 +500,7 @@ static void timer_stat_sort_freq_add(
 	timer_stat_t **sorted,		/* timer stat sorted list */
 	timer_stat_t *new)		/* timer stat to add */
 {
-	while (*sorted != NULL) {
+	while (*sorted) {
 		if ((*sorted)->delta < new->delta) {
 			new->sorted_freq_next = *(sorted);
 			break;
@@ -531,8 +530,9 @@ static void timer_stat_diff(
 	timer_stat_t *sorted = NULL;
 
 	for (i=0; i<TABLE_SIZE; i++) {
-		timer_stat_t *ts = timer_stats_new[i];
-		while (ts) {
+		timer_stat_t *ts;
+
+		for (ts = timer_stats_new[i]; ts; ts = ts->next) {
 			timer_stat_t *found =
 				timer_stat_find(timer_stats_old, ts);
 			if (found) {
@@ -551,7 +551,6 @@ static void timer_stat_diff(
 					sample_add(ts, whence);
 				}
 			}
-			ts = ts->next;
 		}
 	}
 

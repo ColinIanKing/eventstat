@@ -1,3 +1,10 @@
+eventstat (0.01.09) precise; urgency=low
+
+  * Remove timer_stat_dump cruft
+  * Name callback correctly, update field headings
+
+ -- Colin King <colin.king@canonical.com>  Wed, 28 Dec 2011 13:21:00 +0000
+
 eventstat (0.01.08) precise; urgency=low
 
   * Tidy up lists

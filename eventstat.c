@@ -403,23 +403,6 @@ static void timer_stat_free_contents(
 	}
 }
 
-#if DEBUG_TIMER_STAT_DUMP
-static void timer_stat_dump(timer_stat_t *timer_stats[])
-{
-	int i;
-
-	printf("Timer stat dump:\n");
-
-	for (i=0; i<TABLE_SIZE; i++) {
-		timer_stat_t *ts = timer_stats[i];
-
-		for (ts = timer_stats[i]; ts; ts = ts->next) {
-			printf("%d : %s\n",i, ts->info->ident);
-		}
-	}
-}
-#endif
-
 /*
  *  timer_stat_add()
  *	add timer stats to a hash table if it is new, otherwise just

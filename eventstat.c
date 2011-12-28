@@ -33,8 +33,6 @@
 
 #define OPT_QUIET	(0x00000001)
 
-#define DEBUG_TIMER_STAT_DUMP	(0)
-
 typedef struct link {
 	void *data;
 	struct link *next;
@@ -743,9 +741,6 @@ int main(int argc, char **argv)
 	gettimeofday(&tv1, NULL);
 	get_events(timer_stats_old);
 
-#if DEBUG_TIMER_STAT_DUMP
-	timer_stat_dump(timer_stats_old);
-#endif
 	while (!stop_eventstat && (forever || count--)) {
 		suseconds_t usec;
 

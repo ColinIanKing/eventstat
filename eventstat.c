@@ -52,7 +52,7 @@ typedef struct timer_info {
 	pid_t		pid;
 	char 		*task;		/* Name of process/kernel task */
 	char		*func;		/* Kernel waiting func */
-	char		*timer;		/* Kernel timer */
+	char		*callback;	/* Kernel timer callback func */
 	char		*ident;		/* Unique identity */
 	unsigned long	total;		/* Total number of events */
 } timer_info_t;
@@ -265,14 +265,14 @@ static void samples_dump(const char *filename, const int duration)
 		fprintf(fp, ",%s", sorted_timer_infos[i]->task);
 	fprintf(fp, "\n");
 
-	fprintf(fp, "Func:");
+	fprintf(fp, "Init Function:");
 	for (i=0; i<n; i++)
 		fprintf(fp, ",%s", sorted_timer_infos[i]->func);
 	fprintf(fp, "\n");
 
-	fprintf(fp, "Timer:");
+	fprintf(fp, "Callback:");
 	for (i=0; i<n; i++)
-		fprintf(fp, ",%s", sorted_timer_infos[i]->timer);
+		fprintf(fp, ",%s", sorted_timer_infos[i]->callback);
 	fprintf(fp, "\n");
 
 	fprintf(fp, "Total:");
@@ -323,12 +323,12 @@ static timer_info_t *timer_info_find(timer_info_t *new_info)
 	info->pid = new_info->pid;
 	info->task = strdup(new_info->task);
 	info->func = strdup(new_info->func);
-	info->timer = strdup(new_info->timer);
+	info->callback = strdup(new_info->callback);
 	info->ident = strdup(new_info->ident);
 
 	if (info->task == NULL ||
 	    info->func == NULL ||
-	    info->timer == NULL ||
+	    info->callback == NULL ||
 	    info->ident == NULL) {
 		fprintf(stderr, "Out of memory allocating a timer stat fields\n");
 		exit(1);
@@ -347,7 +347,7 @@ static void timer_info_free(void *data)
 
 	free(info->task);
 	free(info->func);
-	free(info->timer);
+	free(info->callback);
 	free(info->ident);
 	free(info);
 }
@@ -431,7 +431,7 @@ static void timer_stat_add(
 	pid_t pid,			/* PID of task */
 	char *task,			/* Name of task */
 	char *func,			/* Kernel function */
-	char *timer)			/* Kernel timer */
+	char *callback)			/* Kernel timer callback */
 {
 	char buf[4096];
 	timer_stat_t *ts;
@@ -439,7 +439,7 @@ static void timer_stat_add(
 	timer_info_t info;
 	unsigned long h;
 
-	snprintf(buf, sizeof(buf), "%d:%s:%s:%s", pid, task, func, timer);
+	snprintf(buf, sizeof(buf), "%d:%s:%s:%s", pid, task, func, callback);
 	h = hash_pjw(buf);
 	ts = timer_stats[h];
 
@@ -459,7 +459,7 @@ static void timer_stat_add(
 	info.pid = pid;
 	info.task = task;
 	info.func = func;
-	info.timer = timer;
+	info.callback = callback;
 	info.ident = buf;
 
 	ts_new->count  = count;
@@ -483,7 +483,7 @@ static timer_stat_t *timer_stat_find(
 
 	snprintf(buf, sizeof(buf), "%d:%s:%s:%s",
 		needle->info->pid, needle->info->task,
-		needle->info->func, needle->info->timer);
+		needle->info->func, needle->info->callback);
 
 	for (ts = haystack[hash_pjw(buf)]; ts; ts = ts->next)
 		if (strcmp(ts->info->ident, buf) == 0)
@@ -556,7 +556,7 @@ static void timer_stat_diff(
 
 	if (!(opt_flags & OPT_QUIET)) {
 		printf("%1s %6s %-5s %-15s %-25s %-s\n",
-			"", "Evnt/s", "PID", "Task", "Func", "Timer");
+			"", "Evnt/s", "PID", "Task", "Init Function", "Callback");
 
 		while (sorted) {
 			if ((n_lines == -1) || (j < n_lines)) {
@@ -565,7 +565,7 @@ static void timer_stat_diff(
 					sorted->old ? " " : "N",
 					(double)sorted->delta / (double)duration,
 					sorted->info->pid, sorted->info->task,
-					sorted->info->func, sorted->info->timer);
+					sorted->info->func, sorted->info->callback);
 			}
 			total += sorted->delta;
 			sorted = sorted->sorted_freq_next;

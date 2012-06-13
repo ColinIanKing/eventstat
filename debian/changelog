@@ -1,3 +1,14 @@
+eventstat (0.01.12-1) unstable; urgency=low
+
+  * Updated version
+  * Add in project homepage
+  * Update manpage section and date
+  * Update copyright URL
+  * Make description more litian friendly
+  * fix typo on debian/watch
+
+ -- Colin King <colin.king@canonical.com>  Wed, 13 Jun 2012 19:18:31 +0100
+
 eventstat (0.01.11-1) unstable; urgency=low
 
   * Update version in Makefile

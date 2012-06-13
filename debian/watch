@@ -1,2 +1,2 @@
 version=3
-http://kernel.ubuntu.com/~cking/tarballs/eventstat/eventstat_(.+).tar.gz
+http://kernel.ubuntu.com/~cking/tarballs/eventstat/eventstat-(.+).tar.gz

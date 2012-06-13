@@ -9,7 +9,7 @@ Build-Depends: debhelper (>= 7)
 Package: eventstat
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: eventstat shows current kernel event states.
+Description: A tool to show current kernel event states.
  Eventstat periodically dumps out the current kernel event state. 
  It keeps track of current events and outputs the change in events
  on each output update.  The tool requires sudo to run since it 

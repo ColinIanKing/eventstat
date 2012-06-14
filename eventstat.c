@@ -83,6 +83,10 @@ static volatile bool stop_eventstat = false;	/* set by sighandler */
 static unsigned long opt_threshold;		/* ignore samples with event delta less than this */
 static unsigned int opt_flags;			/* option flags */
 
+/*
+ *  list_init()
+ *	initialize list
+ */
 static inline void list_init(list_t *list)
 {
 	list->head = NULL;
@@ -90,6 +94,10 @@ static inline void list_init(list_t *list)
 	list->length = 0;
 }
 
+/*
+ *  list_append()
+ *	add a new item to end of the list
+ */
 static link_t *list_append(list_t *list, void *data)
 {
 	link_t *link;
@@ -99,7 +107,7 @@ static link_t *list_append(list_t *list, void *data)
 		exit(EXIT_FAILURE);
 	}
 	link->data = data;
-	
+
 	if (list->head == NULL) {
 		list->head = link;
 		list->tail = link;
@@ -112,6 +120,10 @@ static link_t *list_append(list_t *list, void *data)
 	return link;
 }
 
+/*
+ *  list_free()
+ *	free the list
+ */
 static void list_free(list_t *list, list_link_free_t freefunc)
 {
 	link_t	*link, *next;
@@ -121,7 +133,7 @@ static void list_free(list_t *list, list_link_free_t freefunc)
 
 	for (link = list->head; link; link = next) {
 		next = link->next;
-		if (link->data && freefunc) 
+		if (link->data && freefunc)
 			freefunc(link->data);
 		free(link);
 	}
@@ -136,6 +148,10 @@ static void handle_sigint(int dummy)
 	stop_eventstat = true;
 }
 
+/*
+ *  sample_delta_free()
+ *	free the sample delta list
+ */
 static void sample_delta_free(void *data)
 {
 	sample_delta_list_t *sdl = (sample_delta_list_t*)data;
@@ -169,7 +185,7 @@ static void sample_add(timer_stat_t *timer_stat, unsigned long whence)
 
 	for (link = sample_list.head; link; link = link->next) {
 		sdl = (sample_delta_list_t*)link->data;
-		if (sdl->whence == whence) {	
+		if (sdl->whence == whence) {
 			found = true;
 			break;
 		}
@@ -227,6 +243,10 @@ static int info_compare_total(const void *item1, const void *item2)
 	return (*info2)->total - (*info1)->total;
 }
 
+/*
+ *  samples_dump()
+ *	dump out collected sample information
+ */
 static void samples_dump(const char *filename, const int duration)
 {
 	sample_delta_list_t	*sdl;
@@ -339,6 +359,10 @@ static timer_info_t *timer_info_find(timer_info_t *new_info)
 	return info;
 }
 
+/*
+ *  timer_info_free()
+ *	free up timer_info
+ */
 static void timer_info_free(void *data)
 {
 	timer_info_t *info = (timer_info_t*)data;
@@ -749,9 +773,9 @@ int main(int argc, char **argv)
 		       (tv1.tv_usec - tv2.tv_usec);
 		tv2.tv_sec = usec / 1000000;
 		tv2.tv_usec = usec % 1000000;
-		
+
 		select(0, NULL, NULL, NULL, &tv2);
-		
+
 		get_events(timer_stats_new);
 		timer_stat_diff(duration, n_lines, whence,
 			timer_stats_old, timer_stats_new);

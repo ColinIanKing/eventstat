@@ -1,3 +1,14 @@
+eventstat (0.01.13-1) unstable; urgency=low
+
+  * Update version number in Makefile
+  * Fix debian copyright lintian errors
+  * Add some more comments, fix trailing whitespaces
+  * Update source copyright year
+  * Update copyright year
+  * Update debian/copyright
+
+ -- Colin King <colin.king@canonical.com>  Thu, 14 Jun 2012 10:40:23 +0100
+
 eventstat (0.01.12-1) unstable; urgency=low
 
   * Updated version

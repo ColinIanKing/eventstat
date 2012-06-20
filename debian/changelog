@@ -1,3 +1,9 @@
+eventstat (0.01.15-1) unstable; urgency=low
+
+  * Initial Debian release (Closes: #678277)
+
+ -- Colin King <colin.king@canonical.com>  Wed, 20 Jun 2012 15:43:28 +0100
+
 eventstat (0.01.14-1) unstable; urgency=low
 
   * Update version

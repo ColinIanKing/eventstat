@@ -10,7 +10,7 @@ Homepage: http://kernel.ubuntu.com/~cking/eventstat
 Package: eventstat
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: A tool to show current kernel event states.
+Description: kernel event states monitoring tool
  Eventstat periodically dumps out the current kernel event state. 
  It keeps track of current events and outputs the change in events
  on each output update.  The tool requires sudo to run since it 

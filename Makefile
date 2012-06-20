@@ -6,7 +6,7 @@ BINDIR=/usr/bin
 MANDIR=/usr/share/man/man8
 
 eventstat: eventstat.o
-	$(CC) $< -lm -o $@
+	$(CC) $< -o $@
 
 eventstat.8.gz: eventstat.8
 	gzip -c $< > $@

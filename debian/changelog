@@ -1,3 +1,11 @@
+eventstat (0.01.14-1) unstable; urgency=low
+
+  * Update version
+  * Fix debian/control Description lintian warning
+  * Remove -lm from Makefile - not needed
+
+ -- Colin King <colin.king@canonical.com>  Wed, 20 Jun 2012 14:10:15 +0100
+
 eventstat (0.01.13-1) unstable; urgency=low
 
   * Update version number in Makefile

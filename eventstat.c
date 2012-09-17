@@ -26,6 +26,8 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
+#include <limits.h>
+#include <errno.h>
 
 #define APP_NAME	"eventstat"
 #define TIMER_STATS	"/proc/timer_stats"
@@ -52,6 +54,7 @@ typedef struct timer_info {
 	char		*func;		/* Kernel waiting func */
 	char		*callback;	/* Kernel timer callback func */
 	char		*ident;		/* Unique identity */
+	bool		kernel_thread;	/* True if task is a kernel thread */
 	unsigned long	total;		/* Total number of events */
 } timer_info_t;
 
@@ -244,6 +247,23 @@ static int info_compare_total(const void *item1, const void *item2)
 }
 
 /*
+ *  pid_a_kernel_thread
+ *
+ */
+static bool pid_a_kernel_thread(pid_t id)
+{
+	char buffer[128];
+	char path[PATH_MAX];
+
+	snprintf(buffer, sizeof(buffer), "/proc/%d/exe", id);
+	if (readlink(buffer, path, sizeof(path)) < 0)
+		if (errno == ENOENT)
+			return true;
+
+	return false;
+}
+
+/*
  *  samples_dump()
  *	dump out collected sample information
  */
@@ -343,6 +363,7 @@ static timer_info_t *timer_info_find(timer_info_t *new_info)
 	info->func = strdup(new_info->func);
 	info->callback = strdup(new_info->callback);
 	info->ident = strdup(new_info->ident);
+	info->kernel_thread = new_info->kernel_thread;
 
 	if (info->task == NULL ||
 	    info->func == NULL ||
@@ -436,7 +457,8 @@ static void timer_stat_add(
 	pid_t pid,			/* PID of task */
 	char *task,			/* Name of task */
 	char *func,			/* Kernel function */
-	char *callback)			/* Kernel timer callback */
+	char *callback,			/* Kernel timer callback */
+	bool kernel_thread)		/* Is a kernel thread */
 {
 	char buf[4096];
 	timer_stat_t *ts;
@@ -466,6 +488,7 @@ static void timer_stat_add(
 	info.func = func;
 	info.callback = callback;
 	info.ident = buf;
+	info.kernel_thread = kernel_thread;
 
 	ts_new->count  = count;
 	ts_new->info = timer_info_find(&info);
@@ -531,6 +554,7 @@ static void timer_stat_diff(
 	int i;
 	int j = 0;
 	unsigned long total = 0UL;
+	unsigned long kt_total = 0UL;
 
 	timer_stat_t *sorted = NULL;
 
@@ -573,10 +597,15 @@ static void timer_stat_diff(
 					sorted->info->func, sorted->info->callback);
 			}
 			total += sorted->delta;
+			if (sorted->info->kernel_thread)
+				kt_total += sorted->delta;
+
 			sorted = sorted->sorted_freq_next;
 		}
-		printf("%lu Total events, %5.2f events/sec\n\n",
-			total, (double)total / duration);
+		printf("%lu Total events, %5.2f events/sec (kernel: %5.2f, userspace: %5.2f)\n\n",
+			total, (double)total / duration,
+			(double)kt_total / duration,
+			(double)(total - kt_total) / duration);
 	}
 }
 
@@ -604,6 +633,7 @@ void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 		char task[64];
 		char func[128];
 		char timer[128];
+		bool kernel_thread;
 
 		if (fgets(buf, sizeof(buf), fp) == NULL)
 			break;
@@ -629,6 +659,15 @@ void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 		sscanf(buf, "%lu", &count);
 		sscanf(ptr, "%d %s %s (%[^)])", &pid, task, func, timer);
 
+		kernel_thread = pid_a_kernel_thread(pid);
+
+		if (kernel_thread) {
+			char tmp[64];
+			task[13] = '\0';
+			snprintf(tmp, sizeof(tmp), "[%s]", task);
+			strcpy(task, tmp);
+		}
+
 		if (strcmp(task, "swapper") == 0 &&
 		    strcmp(func, "hrtimer_start_range_ns") == 0 &&
 		    strcmp(timer, "tick_sched_timer") == 0) {
@@ -648,7 +687,7 @@ void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 		    (strcmp(task, APP_NAME) == 0))
 			continue;
 
-		timer_stat_add(timer_stats, count, pid, task, func, timer);
+		timer_stat_add(timer_stats, count, pid, task, func, timer, kernel_thread);
 	}
 
 	fclose(fp);

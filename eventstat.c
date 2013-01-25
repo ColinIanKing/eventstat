@@ -588,7 +588,7 @@ static void timer_stat_diff(
 			"", "Evnt/s", "PID", "Task", "Init Function", "Callback");
 
 		while (sorted) {
-			if ((n_lines == -1) || (j < n_lines)) {
+			if (((n_lines == -1) || (j < n_lines)) && (sorted->delta != 0)) {
 				j++;
 				printf("%1s %6.2f %5d %-15s %-25s %-s\n",
 					sorted->old ? " " : "N",

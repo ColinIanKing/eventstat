@@ -731,6 +731,7 @@ void set_timer_stat(char *str)
  */
 void show_usage(void)
 {
+	printf("%s, version %s\n\n", APP_NAME, VERSION);
 	printf("Usage: %s [-q] [-r file] [-n events] [-c] [-t thresh] [duration] [count]\n", APP_NAME);
 	printf("\t-c report cumulative events rather than events per second.\n");
 	printf("\t-h print this help.\n");

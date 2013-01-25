@@ -21,7 +21,7 @@ eventstat \- a tool to measure system events.
 
 .SH SYNOPSIS
 .B eventstat
-.RI [ \-r csv_file] [\-n event_count] [ delay " [count]]
+.RI [options] " [delay " [count]]
 .br
 
 .SH DESCRIPTION
@@ -45,7 +45,10 @@ can be then imported and graphed using your favourite open
 source spread sheet.
 .TP
 .B \-t threshold
-ignore samples where the event delta per second less than the given threshold
+ignore samples where the event delta per second less than the given threshold.
+.TP
+.B \-c
+report cumulative events rather than events per sample period.
 .SH EXAMPLES
 .LP
 Dump events every second until stopped.

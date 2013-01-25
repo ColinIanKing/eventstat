@@ -34,6 +34,7 @@
 #define TABLE_SIZE	(1997)		/* Should be a prime */
 
 #define OPT_QUIET	(0x00000001)
+#define OPT_CUMULATIVE	(0x00000002)
 
 typedef struct link {
 	void *data;
@@ -529,9 +530,16 @@ static void timer_stat_sort_freq_add(
 	timer_stat_t *new)		/* timer stat to add */
 {
 	while (*sorted) {
-		if ((*sorted)->delta < new->delta) {
-			new->sorted_freq_next = *(sorted);
-			break;
+		if (opt_flags & OPT_CUMULATIVE) {
+			if ((*sorted)->count < new->count) {
+				new->sorted_freq_next = *(sorted);
+				break;
+			}
+		} else {
+			if ((*sorted)->delta < new->delta) {
+				new->sorted_freq_next = *(sorted);
+				break;
+			}
 		}
 		sorted = &(*sorted)->sorted_freq_next;
 	}
@@ -584,17 +592,26 @@ static void timer_stat_diff(
 	}
 
 	if (!(opt_flags & OPT_QUIET)) {
-		printf("%1s %6s %-5s %-15s %-25s %-s\n",
-			"", "Evnt/s", "PID", "Task", "Init Function", "Callback");
+		printf("%8s %-5s %-15s %-25s %-s\n",
+			opt_flags & OPT_CUMULATIVE ? "Events" : "Event/s",
+			"PID", "Task", "Init Function", "Callback");
 
 		while (sorted) {
 			if (((n_lines == -1) || (j < n_lines)) && (sorted->delta != 0)) {
 				j++;
-				printf("%1s %6.2f %5d %-15s %-25s %-s\n",
-					sorted->old ? " " : "N",
-					(double)sorted->delta / (double)duration,
-					sorted->info->pid, sorted->info->task,
-					sorted->info->func, sorted->info->callback);
+				if (opt_flags & OPT_CUMULATIVE) {
+					printf("%1s %6lu %5d %-15s %-25s %-s\n",
+						sorted->old ? " " : "N",
+						sorted->count,
+						sorted->info->pid, sorted->info->task,
+						sorted->info->func, sorted->info->callback);
+				} else {
+					printf("%1s %6.2f %5d %-15s %-25s %-s\n",
+						sorted->old ? " " : "N",
+						(double)sorted->delta / (double)duration,
+						sorted->info->pid, sorted->info->task,
+						sorted->info->func, sorted->info->callback);
+				}
 			}
 			total += sorted->delta;
 			if (sorted->info->kernel_thread)
@@ -608,7 +625,6 @@ static void timer_stat_diff(
 			(double)(total - kt_total) / duration);
 	}
 }
-
 
 /*
  *  get_events()
@@ -737,10 +753,13 @@ int main(int argc, char **argv)
 	list_init(&sample_list);
 
 	for (;;) {
-		int c = getopt(argc, argv, "hn:qr:t:");
+		int c = getopt(argc, argv, "chn:qr:t:");
 		if (c == -1)
 			break;
 		switch (c) {
+		case 'c':
+			opt_flags |= OPT_CUMULATIVE;
+			break;
 		case 'h':
 			show_usage();
 			exit(EXIT_SUCCESS);

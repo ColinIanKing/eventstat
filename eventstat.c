@@ -731,12 +731,13 @@ void set_timer_stat(char *str)
  */
 void show_usage(void)
 {
-	printf("Usage: %s [-q] [-r csv_file] [-n event_count] [duration] [count]\n", APP_NAME);
-	printf("\t-h help\n");
-	printf("\t-n specifies number of events to display\n");
-	printf("\t-q run quietly, useful with option -r\n");
+	printf("Usage: %s [-q] [-r file] [-n events] [-c] [-t thresh] [duration] [count]\n", APP_NAME);
+	printf("\t-c report cumulative events rather than events per second.\n");
+	printf("\t-h print this help.\n");
+	printf("\t-n specifies number of events to display.\n");
+	printf("\t-q run quietly, useful with option -r.\n");
 	printf("\t-r specifies a comma separated values output file to dump samples into.\n");
-	printf("\t-t specifies an event threshold where samples less than this are ignored.\n");
+	printf("\t-t samples less than the specified threshold are ignored.\n");
 }
 
 int main(int argc, char **argv)

@@ -1,3 +1,10 @@
+eventstat (0.01.17-1) unstable; urgency=low
+
+  * Update version in Makefile
+  * debian: control: update Standards-Version to 3.9.4
+
+ -- Colin King <colin.king@canonical.com>  Mon, 18 Feb 2013 16:55:24 +0000
+
 eventstat (0.01.16-1) unstable; urgency=low
 
   * Bump version, add version number to eventstat

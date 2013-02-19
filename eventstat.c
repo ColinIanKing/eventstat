@@ -815,12 +815,18 @@ int main(int argc, char **argv)
 
 	signal(SIGINT, &handle_sigint);
 
+	if ((timer_stats_old = calloc(TABLE_SIZE, sizeof(timer_stat_t*))) == NULL) {
+		fprintf(stderr, "Cannot allocate old timer stats table\n");
+		exit(EXIT_FAILURE);
+	}
+	if ((timer_stats_new = calloc(TABLE_SIZE, sizeof(timer_stat_t*))) == NULL) {
+		fprintf(stderr, "Cannot allocate old timer stats table\n");
+		exit(EXIT_FAILURE);
+	}
+
 	/* Should really catch signals and set back to zero before we die */
 	set_timer_stat("1");
 	sleep(1);
-
-	timer_stats_old = calloc(TABLE_SIZE, sizeof(timer_stat_t*));
-	timer_stats_new = calloc(TABLE_SIZE, sizeof(timer_stat_t*));
 
 	gettimeofday(&tv1, NULL);
 	get_events(timer_stats_old);

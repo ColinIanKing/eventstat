@@ -1,3 +1,12 @@
+eventstat (0.01.18-1) unstable; urgency=low
+
+  * Makefile: bump version
+  * Makefile: include CFLAGS and LDFLAGS into CC line
+  * debian: rules: force dh_ to apply flags during make phase
+  * Remove unwanted debian/powerstat.install
+
+ -- Colin King <colin.king@canonical.com>  Tue, 19 Feb 2013 12:04:06 +0000
+
 eventstat (0.01.17-1) unstable; urgency=low
 
   * Update version in Makefile

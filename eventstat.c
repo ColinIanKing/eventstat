@@ -91,13 +91,17 @@ static unsigned int opt_flags;			/* option flags */
  *  set_timer_stat()
  *	enable/disable timer stat
  */
-void set_timer_stat(char *str)
+void set_timer_stat(char *str, bool carp)
 {
 	FILE *fp;
 
 	if ((fp = fopen(TIMER_STATS, "w")) == NULL) {
-		fprintf(stderr, "Cannot write to %s\n",TIMER_STATS);
-		exit(EXIT_FAILURE);
+		if (carp) {
+			fprintf(stderr, "Cannot write to %s\n",TIMER_STATS);
+			exit(EXIT_FAILURE);
+		} else {
+			return;
+		}
 	}
 	fprintf(fp, "%s\n", str);
 	fclose(fp);
@@ -111,7 +115,7 @@ void eventstat_exit(int status) __attribute__ ((noreturn));
  */
 void eventstat_exit(int status)
 {
-	set_timer_stat("0");
+	set_timer_stat("0", false);
 
 	exit(status);
 }
@@ -838,7 +842,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Should really catch signals and set back to zero before we die */
-	set_timer_stat("1");
+	set_timer_stat("1", true);
 	sleep(1);
 
 	gettimeofday(&tv1, NULL);

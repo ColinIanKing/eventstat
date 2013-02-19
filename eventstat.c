@@ -283,7 +283,7 @@ static int info_compare_total(const void *item1, const void *item2)
 static bool pid_a_kernel_thread(pid_t id)
 {
 	char buffer[128];
-	char path[PATH_MAX];
+	char path[32];
 
 	snprintf(buffer, sizeof(buffer), "/proc/%d/exe", id);
 	if (readlink(buffer, path, sizeof(path)) < 0)

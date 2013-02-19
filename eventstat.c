@@ -88,6 +88,35 @@ static unsigned long opt_threshold;		/* ignore samples with event delta less tha
 static unsigned int opt_flags;			/* option flags */
 
 /*
+ *  set_timer_stat()
+ *	enable/disable timer stat
+ */
+void set_timer_stat(char *str)
+{
+	FILE *fp;
+
+	if ((fp = fopen(TIMER_STATS, "w")) == NULL) {
+		fprintf(stderr, "Cannot write to %s\n",TIMER_STATS);
+		exit(EXIT_FAILURE);
+	}
+	fprintf(fp, "%s\n", str);
+	fclose(fp);
+}
+
+void eventstat_exit(int status) __attribute__ ((noreturn));
+
+/*
+ *  eventstat_exit()
+ *	exit and set timer stat to 0
+ */
+void eventstat_exit(int status)
+{
+	set_timer_stat("0");
+
+	exit(status);
+}
+
+/*
  *  list_init()
  *	initialize list
  */
@@ -108,7 +137,7 @@ static link_t *list_append(list_t *list, void *data)
 
 	if ((link = calloc(sizeof(link_t), 1)) == NULL) {
 		fprintf(stderr, "Cannot allocate list link\n");
-		exit(EXIT_FAILURE);
+		eventstat_exit(EXIT_FAILURE);
 	}
 	link->data = data;
 
@@ -202,7 +231,7 @@ static void sample_add(timer_stat_t *timer_stat, unsigned long whence)
 	if (!found) {
 		if ((sdl = calloc(1, sizeof(sample_delta_list_t))) == NULL) {
 			fprintf(stderr, "Cannot allocate sample delta list\n");
-			exit(EXIT_FAILURE);
+			eventstat_exit(EXIT_FAILURE);
 		}
 		sdl->whence = whence;
 		list_append(&sample_list, sdl);
@@ -211,7 +240,7 @@ static void sample_add(timer_stat_t *timer_stat, unsigned long whence)
 	/* Now append the sdi onto the list */
 	if ((sdi = calloc(1, sizeof(sample_delta_item_t))) == NULL) {
 		fprintf(stderr, "Cannot allocate sample delta item\n");
-		exit(EXIT_FAILURE);
+		eventstat_exit(EXIT_FAILURE);
 	}
 	sdi->delta = timer_stat->delta;
 	sdi->info  = timer_stat->info;
@@ -287,7 +316,7 @@ static void samples_dump(const char *filename, const int duration)
 
 	if ((sorted_timer_infos = calloc(n, sizeof(timer_info_t*))) == NULL) {
 		fprintf(stderr, "Cannot allocate buffer for sorting timer_infos\n");
-		exit(EXIT_FAILURE);
+		eventstat_exit(EXIT_FAILURE);
 	}
 
 	/* Just want the timers with some non-zero total */
@@ -356,7 +385,7 @@ static timer_info_t *timer_info_find(timer_info_t *new_info)
 
 	if ((info = calloc(1, sizeof(timer_info_t))) == NULL) {
 		fprintf(stderr, "Cannot allocate timer info\n");
-		exit(EXIT_FAILURE);
+		eventstat_exit(EXIT_FAILURE);
 	}
 
 	info->pid = new_info->pid;
@@ -371,7 +400,7 @@ static timer_info_t *timer_info_find(timer_info_t *new_info)
 	    info->callback == NULL ||
 	    info->ident == NULL) {
 		fprintf(stderr, "Out of memory allocating a timer stat fields\n");
-		exit(EXIT_FAILURE);
+		eventstat_exit(EXIT_FAILURE);
 	}
 
 	/* Does not exist in list, append it */
@@ -481,7 +510,7 @@ static void timer_stat_add(
 
 	if ((ts_new = malloc(sizeof(timer_stat_t))) == NULL) {
 		fprintf(stderr, "Out of memory allocating a timer stat\n");
-		exit(EXIT_FAILURE);
+		eventstat_exit(EXIT_FAILURE);
 	}
 
 	info.pid = pid;
@@ -710,22 +739,6 @@ void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 }
 
 /*
- *  set_timer_stat()
- *	enable/disable timer stat
- */
-void set_timer_stat(char *str)
-{
-	FILE *fp;
-
-	if ((fp = fopen(TIMER_STATS, "w")) == NULL) {
-		fprintf(stderr, "Cannot write to %s\n",TIMER_STATS);
-		exit(EXIT_FAILURE);
-	}
-	fprintf(fp, "%s\n", str);
-	fclose(fp);
-}
-
-/*
  *  show_usage()
  *	show how to use
  */
@@ -764,19 +777,19 @@ int main(int argc, char **argv)
 			break;
 		case 'h':
 			show_usage();
-			exit(EXIT_SUCCESS);
+			eventstat_exit(EXIT_SUCCESS);
 		case 'n':
 			n_lines = atoi(optarg);
 			if (n_lines < 1) {
 				fprintf(stderr, "-n option must be greater than 0\n");
-				exit(EXIT_FAILURE);
+				eventstat_exit(EXIT_FAILURE);
 			}
 			break;
 		case 't':
 			opt_threshold = strtoull(optarg, NULL, 10);
 			if (opt_threshold < 1) {
 				fprintf(stderr, "-t threshold must be 1 or more.\n");
-				exit(EXIT_FAILURE);
+				eventstat_exit(EXIT_FAILURE);
 			}
 			break;
 		case 'q':
@@ -792,7 +805,7 @@ int main(int argc, char **argv)
 		duration = atoi(argv[optind++]);
 		if (duration < 1) {
 			fprintf(stderr, "Duration must be > 0\n");
-			exit(EXIT_FAILURE);
+			eventstat_exit(EXIT_FAILURE);
 		}
 	}
 
@@ -801,7 +814,7 @@ int main(int argc, char **argv)
 		count = atoi(argv[optind++]);
 		if (count < 1) {
 			fprintf(stderr, "Count must be > 0\n");
-			exit(EXIT_FAILURE);
+			eventstat_exit(EXIT_FAILURE);
 		}
 	}
 
@@ -810,18 +823,18 @@ int main(int argc, char **argv)
 	if (geteuid() != 0) {
 		fprintf(stderr, "%s requires root privileges to write to %s\n",
 			APP_NAME, TIMER_STATS);
-		exit(EXIT_FAILURE);
+		eventstat_exit(EXIT_FAILURE);
 	}
 
 	signal(SIGINT, &handle_sigint);
 
 	if ((timer_stats_old = calloc(TABLE_SIZE, sizeof(timer_stat_t*))) == NULL) {
 		fprintf(stderr, "Cannot allocate old timer stats table\n");
-		exit(EXIT_FAILURE);
+		eventstat_exit(EXIT_FAILURE);
 	}
 	if ((timer_stats_new = calloc(TABLE_SIZE, sizeof(timer_stat_t*))) == NULL) {
 		fprintf(stderr, "Cannot allocate old timer stats table\n");
-		exit(EXIT_FAILURE);
+		eventstat_exit(EXIT_FAILURE);
 	}
 
 	/* Should really catch signals and set back to zero before we die */
@@ -863,7 +876,5 @@ int main(int argc, char **argv)
 	samples_free();
 	timer_info_list_free();
 
-	set_timer_stat("0");
-
-	exit(EXIT_SUCCESS);
+	eventstat_exit(EXIT_SUCCESS);
 }

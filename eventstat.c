@@ -371,7 +371,7 @@ static timer_info_t *timer_info_find(timer_info_t *new_info)
 	    info->callback == NULL ||
 	    info->ident == NULL) {
 		fprintf(stderr, "Out of memory allocating a timer stat fields\n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	/* Does not exist in list, append it */
@@ -481,7 +481,7 @@ static void timer_stat_add(
 
 	if ((ts_new = malloc(sizeof(timer_stat_t))) == NULL) {
 		fprintf(stderr, "Out of memory allocating a timer stat\n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	info.pid = pid;

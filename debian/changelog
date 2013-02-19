@@ -1,3 +1,15 @@
+eventstat (0.01.19-1) unstable; urgency=low
+
+  * Makefile: bump version
+  * eventstat: make set_timer_stat conditionally complain if it fails
+  * eventstat: remove need for PATH_MAX, replace with suitable size
+  * debian: control: set Architecture to just linux-any
+  * eventstat: ensure all exits tidy up by setting the timer stat to 0
+  * eventstat: exit with EXIT_FAILURE rather than 1
+  * eventstat: handle failed calloc on timer stat tables
+
+ -- Colin King <colin.king@canonical.com>  Tue, 19 Feb 2013 22:04:06 +0000
+
 eventstat (0.01.18-1) unstable; urgency=low
 
   * Makefile: bump version

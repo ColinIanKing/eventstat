@@ -8,7 +8,7 @@ Build-Depends: debhelper (>= 7)
 Homepage: http://kernel.ubuntu.com/~cking/eventstat
 
 Package: eventstat
-Architecture: any
+Architecture: linux-any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: kernel event states monitoring tool
  Eventstat periodically dumps out the current kernel event state. 

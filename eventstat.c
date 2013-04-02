@@ -26,8 +26,11 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <limits.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #define APP_NAME	"eventstat"
 #define TIMER_STATS	"/proc/timer_stats"
@@ -35,6 +38,9 @@
 
 #define OPT_QUIET	(0x00000001)
 #define OPT_CUMULATIVE	(0x00000002)
+#define OPT_CMD_SHORT	(0x00000004)
+#define OPT_CMD_LONG	(0x00000008)
+#define OPT_CMD		(OPT_CMD_SHORT | OPT_CMD_LONG)
 
 typedef struct link {
 	void *data;
@@ -52,6 +58,7 @@ typedef void (*list_link_free_t)(void *);
 typedef struct timer_info {
 	pid_t		pid;
 	char 		*task;		/* Name of process/kernel task */
+	char		*cmdline;	/* From /proc/$pid/cmdline */
 	char		*func;		/* Kernel waiting func */
 	char		*callback;	/* Kernel timer callback func */
 	char		*ident;		/* Unique identity */
@@ -298,6 +305,41 @@ static bool pid_a_kernel_thread(pid_t id)
 }
 
 /*
+ *  get_pid_cmdline
+ * 	get process's /proc/pid/cmdline
+ */
+static char *get_pid_cmdline(pid_t id)
+{
+	char buffer[4096];
+	char *ptr;
+	int fd;
+	ssize_t ret;
+
+	snprintf(buffer, sizeof(buffer), "/proc/%d/cmdline", id);
+
+	if ((fd = open(buffer, O_RDONLY)) < 0)
+		return NULL;
+
+	if ((ret = read(fd, buffer, sizeof(buffer))) <= 0)
+		return NULL;
+
+	/*
+	 *  OPT_CMD_LONG option we get the full cmdline args
+	 */
+	if (opt_flags & OPT_CMD_LONG) {
+		for (ptr = buffer; ptr < buffer + ret - 1; ptr++) {
+			if (*ptr == '\0')
+				*ptr = ' ';
+		}
+		*ptr = '\0';
+	}
+
+	close(fd);
+
+	return strdup(buffer);
+}
+
+/*
  *  samples_dump()
  *	dump out collected sample information
  */
@@ -333,8 +375,16 @@ static void samples_dump(const char *filename, const int duration)
 	qsort(sorted_timer_infos, n, sizeof(timer_info_t *), info_compare_total);
 
 	fprintf(fp, "Task:");
-	for (i=0; i<n; i++)
-		fprintf(fp, ",%s", sorted_timer_infos[i]->task);
+	for (i=0; i<n; i++) {
+		char *task;
+
+		if ((opt_flags & OPT_CMD) && (sorted_timer_infos[i]->cmdline != NULL))
+			task = sorted_timer_infos[i]->cmdline;
+		else
+			task = sorted_timer_infos[i]->task;
+
+		fprintf(fp, ",%s", task);
+	}
 	fprintf(fp, "\n");
 
 	fprintf(fp, "Init Function:");
@@ -394,6 +444,9 @@ static timer_info_t *timer_info_find(timer_info_t *new_info)
 
 	info->pid = new_info->pid;
 	info->task = strdup(new_info->task);
+	if (opt_flags & OPT_CMD)
+		info->cmdline = get_pid_cmdline(new_info->pid);
+
 	info->func = strdup(new_info->func);
 	info->callback = strdup(new_info->callback);
 	info->ident = strdup(new_info->ident);
@@ -423,6 +476,7 @@ static void timer_info_free(void *data)
 	timer_info_t *info = (timer_info_t*)data;
 
 	free(info->task);
+	free(info->cmdline);
 	free(info->func);
 	free(info->callback);
 	free(info->ident);
@@ -749,12 +803,14 @@ void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 void show_usage(void)
 {
 	printf("%s, version %s\n\n", APP_NAME, VERSION);
-	printf("Usage: %s [-q] [-r file] [-n events] [-c] [-t thresh] [duration] [count]\n", APP_NAME);
+	printf("Usage: %s [-q] [-s] [-l] [-r file] [-n events] [-c] [-t thresh] [duration] [count]\n", APP_NAME);
 	printf("\t-c report cumulative events rather than events per second.\n");
 	printf("\t-h print this help.\n");
+	printf("\t-l use long cmdline text from /proc/pid/cmdline with CSV output.\n");
 	printf("\t-n specifies number of events to display.\n");
 	printf("\t-q run quietly, useful with option -r.\n");
-	printf("\t-r specifies a comma separated values output file to dump samples into.\n");
+	printf("\t-r specifies a comma separated values (CSV) output file to dump samples into.\n");
+	printf("\t-s use short process name from /proc/pid/cmdline with CSV output.\n");
 	printf("\t-t samples less than the specified threshold are ignored.\n");
 }
 
@@ -772,7 +828,7 @@ int main(int argc, char **argv)
 	list_init(&sample_list);
 
 	for (;;) {
-		int c = getopt(argc, argv, "chn:qr:t:");
+		int c = getopt(argc, argv, "cslhn:qr:t:");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -801,6 +857,12 @@ int main(int argc, char **argv)
 			break;
 		case 'r':
 			csv_results = optarg;
+			break;
+		case 's':
+			opt_flags |= OPT_CMD_SHORT;
+			break;
+		case 'l':
+			opt_flags |= OPT_CMD_LONG;
 			break;
 		}
 	}

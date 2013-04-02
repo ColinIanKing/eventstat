@@ -44,6 +44,14 @@ output gathered data in a comma separated values file. This
 can be then imported and graphed using your favourite open
 source spread sheet.
 .TP
+.B \-s
+report short process name from /proc/pid/cmdline in CSV output. This reports
+just the process name.
+.TP
+.B \-l
+report long process name from /proc/pid/cmdline in CSV output. This reports
+the process name and all the command line arguments.
+.TP
 .B \-t threshold
 ignore samples where the event delta per second less than the given threshold.
 .TP
@@ -64,6 +72,11 @@ sudo eventstat \-n 20 60
 Dump events every 10 seconds just 5 times.
 .RS 8
 sudo eventstat 10 5
+.RE
+.LP
+Quietly dump events every 10 seconds just 5 times into a CSV file with short process name.
+.RS 8
+sudo eventstat 10 5 \-q \-s \-r results.csv
 .RE
 .SH SEE ALSO
 .BR powertop (8) 

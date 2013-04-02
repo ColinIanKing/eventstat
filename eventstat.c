@@ -323,6 +323,8 @@ static char *get_pid_cmdline(pid_t id)
 	if ((ret = read(fd, buffer, sizeof(buffer))) <= 0)
 		return NULL;
 
+	buffer[sizeof(buffer)-1] = '\0';
+
 	/*
 	 *  OPT_CMD_LONG option we get the full cmdline args
 	 */

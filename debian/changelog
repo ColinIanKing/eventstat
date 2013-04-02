@@ -1,3 +1,13 @@
+eventstat (0.01.20-1) unstable; urgency=low
+
+  * Makefile: bump version
+  * eventstat: ensure we don't fall off end of buffer
+  * evenstat.8: add -s -l options to man page
+  * eventstat: Add /proc/pid/cmdline process info in CSV output
+  * eventstat.8: ensure - sign is escaped in manual
+
+ -- Colin King <colin.king@canonical.com>  Tue, 2 Apr 2013 15:13:00 +0100
+
 eventstat (0.01.19-1) unstable; urgency=low
 
   * Makefile: bump version

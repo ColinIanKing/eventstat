@@ -31,15 +31,17 @@
 #include <limits.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <libgen.h>
 
 #define APP_NAME	"eventstat"
 #define TIMER_STATS	"/proc/timer_stats"
 #define TABLE_SIZE	(1997)		/* Should be a prime */
 
-#define OPT_QUIET	(0x00000001)
-#define OPT_CUMULATIVE	(0x00000002)
-#define OPT_CMD_SHORT	(0x00000004)
-#define OPT_CMD_LONG	(0x00000008)
+#define OPT_QUIET		(0x00000001)
+#define OPT_CUMULATIVE		(0x00000002)
+#define OPT_CMD_SHORT		(0x00000004)
+#define OPT_CMD_LONG		(0x00000008)
+#define OPT_DIRNAME_STRIP	(0x00000010)
 #define OPT_CMD		(OPT_CMD_SHORT | OPT_CMD_LONG)
 
 typedef struct link {
@@ -323,6 +325,8 @@ static char *get_pid_cmdline(pid_t id)
 	if ((ret = read(fd, buffer, sizeof(buffer))) <= 0)
 		return NULL;
 
+	close(fd);
+
 	buffer[sizeof(buffer)-1] = '\0';
 
 	/*
@@ -345,7 +349,8 @@ static char *get_pid_cmdline(pid_t id)
 		}
 	}
 
-	close(fd);
+	if (opt_flags & OPT_DIRNAME_STRIP)
+		return strdup(basename(buffer));
 
 	return strdup(buffer);
 }
@@ -839,12 +844,15 @@ int main(int argc, char **argv)
 	list_init(&sample_list);
 
 	for (;;) {
-		int c = getopt(argc, argv, "cslhn:qr:t:");
+		int c = getopt(argc, argv, "cdslhn:qr:t:");
 		if (c == -1)
 			break;
 		switch (c) {
 		case 'c':
 			opt_flags |= OPT_CUMULATIVE;
+			break;
+		case 'd':
+			opt_flags |= OPT_DIRNAME_STRIP;
 			break;
 		case 'h':
 			show_usage();

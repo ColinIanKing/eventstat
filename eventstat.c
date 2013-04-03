@@ -335,6 +335,15 @@ static char *get_pid_cmdline(pid_t id)
 		}
 		*ptr = '\0';
 	}
+	/*
+	 *  OPT_CMD_SHORT option we discard anything after a space
+	 */
+	if (opt_flags & OPT_CMD_SHORT) {
+		for (ptr = buffer; *ptr && (ptr < buffer + ret); ptr++) {
+			if (*ptr == ' ')
+				*ptr = '\0';
+		}
+	}
 
 	close(fd);
 

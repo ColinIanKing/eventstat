@@ -81,6 +81,24 @@ Quietly dump events every 10 seconds just 5 times into a CSV file with short pro
 .RS 8
 sudo eventstat 10 5 \-q \-s \-r results.csv
 .RE
+.SH CSV OUTPUT
+.LP
+The \-r option generates a comma separated file report that can be imported into
+spreadsheets or parsed using text processing tools.  Column 1 of the data is the
+label for each row, columns 2 onwards contain the data for each task that generated
+a wakeup event.
+.LP
+The first row lists the task name of the thread or process. Task names in [ ] brackets are
+kernel threads, other tasks are the names of user space processes.  By default these
+names are derived from the task names from /proc/timer_stats but the \-s \-l options
+fetch more complete task names from /proc/pid/cmdline instead.
+.LP
+The second and third rows list the names of the internal Linux kernel timer init and callback functions, respectively.
+.LP
+The fourth row lists the total number of wakeup events for each task during the entire run of eventstat.
+.LP
+The subsequent rows list the average number of wakeups per second measured during the sample interval for each 
+task in column two onwards. The first column indicates the sample time (in seconds) since the start of the measuring.
 .SH SEE ALSO
 .BR powertop (8) 
 .SH AUTHOR

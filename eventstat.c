@@ -32,6 +32,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
+#include <math.h>
 
 #define APP_NAME	"eventstat"
 #define TIMER_STATS	"/proc/timer_stats"
@@ -42,6 +43,8 @@
 #define OPT_CMD_SHORT		(0x00000004)
 #define OPT_CMD_LONG		(0x00000008)
 #define OPT_DIRNAME_STRIP	(0x00000010)
+#define OPT_SAMPLE_COUNT	(0x00000020)
+#define OPT_RESULT_STATS	(0x00000040)
 #define OPT_CMD		(OPT_CMD_SHORT | OPT_CMD_LONG)
 
 typedef struct link {
@@ -367,6 +370,8 @@ static void samples_dump(const char *filename, const int duration)
 	int i = 0;
 	size_t n = timer_info_list.length;
 	FILE *fp;
+	unsigned long count = 0;
+	double dur;
 
 	if (filename == NULL)
 		return;
@@ -418,7 +423,15 @@ static void samples_dump(const char *filename, const int duration)
 		fprintf(fp, ",%lu", sorted_timer_infos[i]->total);
 	fprintf(fp, "\n");
 
+	/*
+	 *  duration - if -C option is used then don't scale by the
+	 *  per sample duration time, instead give the raw sample count
+	 *  by scaling by 1.0 (i.e. no scaling).
+	 */
+	dur = (opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : (double)duration;
+
 	for (link = sample_list.head; link; link = link->next) {
+		count++;
 		sdl = (sample_delta_list_t*)link->data;
 		fprintf(fp, "%lu", sdl->whence);
 
@@ -426,9 +439,69 @@ static void samples_dump(const char *filename, const int duration)
 		for (i=0; i<n; i++) {
 			sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 			if (sdi)
-				fprintf(fp,",%f", (double)sdi->delta / (double)duration);
+				fprintf(fp, ",%f", sdi->delta / dur);
 			else
 				fprintf(fp,",");
+		}
+		fprintf(fp, "\n");
+	}
+
+	/*
+	 *  -S option - some statistics, min, max, average, std.dev.
+	 */
+	if (opt_flags & OPT_RESULT_STATS) {
+		fprintf(fp, "Min:");
+		for (i = 0; i < n; i++) {
+			unsigned long min = ~0;
+
+			for (link = sample_list.head; link; link = link->next) {
+				sdl = (sample_delta_list_t*)link->data;
+				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
+				if (sdi && min > sdi->delta)
+					min = sdi->delta;
+			}
+			fprintf(fp, ",%f", (double)min / dur);
+		}
+		fprintf(fp, "\n");
+
+		fprintf(fp, "Max:");
+		for (i = 0; i < n; i++) {
+			unsigned long max = 0;
+
+			for (link = sample_list.head; link; link = link->next) {
+				sdl = (sample_delta_list_t*)link->data;
+				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
+				if (sdi && max < sdi->delta)
+					max = sdi->delta;
+			}
+			fprintf(fp, ",%f", (double)max / dur);
+		}
+		fprintf(fp, "\n");
+
+		fprintf(fp, "Average:");
+		for (i=0; i<n; i++)
+			fprintf(fp, ",%f", ((double)sorted_timer_infos[i]->total / dur) / count);
+		fprintf(fp, "\n");
+
+		/*
+		 *  population standard deviation
+		 */
+		fprintf(fp, "Std.Dev.:");
+		for (i = 0; i < n; i++) {
+			double average = sorted_timer_infos[i]->total / count;
+			double sum = 0.0;
+
+			for (link = sample_list.head; link; link = link->next) {
+				sdl = (sample_delta_list_t*)link->data;
+				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
+				if (sdi) {
+					double diff = ((double)sdi->delta - average) / dur;
+					diff = diff * diff;
+					sum += diff;
+				}
+			}
+			sum = sum / (double)count;
+			fprintf(fp, ",%f", sqrt(sum));
 		}
 		fprintf(fp, "\n");
 	}
@@ -467,6 +540,7 @@ static timer_info_t *timer_info_find(timer_info_t *new_info)
 	info->callback = strdup(new_info->callback);
 	info->ident = strdup(new_info->ident);
 	info->kernel_thread = new_info->kernel_thread;
+	info->total = 0;
 
 	if (info->task == NULL ||
 	    info->func == NULL ||
@@ -844,12 +918,15 @@ int main(int argc, char **argv)
 	list_init(&sample_list);
 
 	for (;;) {
-		int c = getopt(argc, argv, "cdslhn:qr:t:");
+		int c = getopt(argc, argv, "cCdsSlhn:qr:t:");
 		if (c == -1)
 			break;
 		switch (c) {
 		case 'c':
 			opt_flags |= OPT_CUMULATIVE;
+			break;
+		case 'C':
+			opt_flags |= OPT_SAMPLE_COUNT;
 			break;
 		case 'd':
 			opt_flags |= OPT_DIRNAME_STRIP;
@@ -879,6 +956,9 @@ int main(int argc, char **argv)
 			break;
 		case 's':
 			opt_flags |= OPT_CMD_SHORT;
+			break;
+		case 'S':
+			opt_flags |= OPT_RESULT_STATS;
 			break;
 		case 'l':
 			opt_flags |= OPT_CMD_LONG;

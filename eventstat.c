@@ -154,7 +154,7 @@ static link_t *list_append(list_t *list, void *data)
 {
 	link_t *link;
 
-	if ((link = calloc(sizeof(link_t), 1)) == NULL) {
+	if ((link = calloc(1, sizeof(link_t))) == NULL) {
 		fprintf(stderr, "Cannot allocate list link\n");
 		eventstat_exit(EXIT_FAILURE);
 	}

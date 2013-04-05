@@ -196,6 +196,8 @@ static void list_free(list_t *list, const list_link_free_t freefunc)
  */
 static void handle_sigint(int dummy)
 {
+	(void)dummy;	/* Stop unused parameter warning with -Wextra */
+
 	stop_eventstat = true;
 }
 

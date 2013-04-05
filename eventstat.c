@@ -270,7 +270,7 @@ static void sample_add(timer_stat_t *timer_stat, const unsigned long whence)
  *  sample_find()
  *	scan through a sample_delta_list for timer info, return NULL if not found
  */
-static sample_delta_item_t inline *sample_find(sample_delta_list_t *sdl, const timer_info_t *info)
+inline static sample_delta_item_t *sample_find(sample_delta_list_t *sdl, const timer_info_t *info)
 {
 	link_t *link;
 

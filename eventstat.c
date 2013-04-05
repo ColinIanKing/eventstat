@@ -34,9 +34,9 @@
 #include <libgen.h>
 #include <math.h>
 
-#define APP_NAME	"eventstat"
-#define TIMER_STATS	"/proc/timer_stats"
-#define TABLE_SIZE	(1997)		/* Should be a prime */
+#define APP_NAME		"eventstat"
+#define TIMER_STATS		"/proc/timer_stats"
+#define TABLE_SIZE		(1997)		/* Should be a prime */
 
 #define OPT_QUIET		(0x00000001)
 #define OPT_CUMULATIVE		(0x00000002)
@@ -48,14 +48,14 @@
 #define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
 
 typedef struct link {
-	void *data;
-	struct link *next;
+	void *data;			/* Data in list */
+	struct link *next;		/* Next item in list */
 } link_t;
 
 typedef struct {
-	link_t	*head;
-	link_t	*tail;
-	size_t	length;
+	link_t	*head;			/* Head of list */
+	link_t	*tail;			/* Tail of list */
+	size_t	length;			/* Length of list */
 } list_t;
 
 typedef void (*list_link_free_t)(void *);
@@ -92,18 +92,18 @@ typedef struct sample_delta_list {
 	list_t			list;
 } sample_delta_list_t;
 
-static list_t timer_info_list;			/* cache list of timer_info */
-static list_t sample_list;			/* list of samples, sorted in sample time order */
-static char *csv_results;			/* results in comma separated values */
+static list_t timer_info_list;		/* cache list of timer_info */
+static list_t sample_list;		/* list of samples, sorted in sample time order */
+static char *csv_results;		/* results in comma separated values */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
-static unsigned long opt_threshold;		/* ignore samples with event delta less than this */
-static unsigned int opt_flags;			/* option flags */
+static unsigned long opt_threshold;	/* ignore samples with event delta less than this */
+static unsigned int opt_flags;		/* option flags */
 
 /*
  *  set_timer_stat()
  *	enable/disable timer stat
  */
-void set_timer_stat(char *str, bool carp)
+void set_timer_stat(const char *str, const bool carp)
 {
 	FILE *fp;
 
@@ -119,13 +119,16 @@ void set_timer_stat(char *str, bool carp)
 	fclose(fp);
 }
 
-void eventstat_exit(int status) __attribute__ ((noreturn));
+/*
+ *  Stop gcc complaining about no return func
+ */
+void eventstat_exit(const int status) __attribute__ ((noreturn));
 
 /*
  *  eventstat_exit()
  *	exit and set timer stat to 0
  */
-void eventstat_exit(int status)
+void eventstat_exit(const int status)
 {
 	set_timer_stat("0", false);
 
@@ -159,11 +162,10 @@ static link_t *list_append(list_t *list, void *data)
 
 	if (list->head == NULL) {
 		list->head = link;
-		list->tail = link;
 	} else {
 		list->tail->next = link;
-		list->tail = link;
 	}
+	list->tail = link;
 	list->length++;
 
 	return link;
@@ -173,7 +175,7 @@ static link_t *list_append(list_t *list, void *data)
  *  list_free()
  *	free the list
  */
-static void list_free(list_t *list, list_link_free_t freefunc)
+static void list_free(list_t *list, const list_link_free_t freefunc)
 {
 	link_t	*link, *next;
 
@@ -222,7 +224,7 @@ static void samples_free(void)
  *  sample_add()
  *	add a timer_stat's delta and info field to a list at time position whence
  */
-static void sample_add(timer_stat_t *timer_stat, unsigned long whence)
+static void sample_add(timer_stat_t *timer_stat, const unsigned long whence)
 {
 	link_t	*link;
 	bool	found = false;
@@ -268,7 +270,7 @@ static void sample_add(timer_stat_t *timer_stat, unsigned long whence)
  *  sample_find()
  *	scan through a sample_delta_list for timer info, return NULL if not found
  */
-static sample_delta_item_t inline *sample_find(sample_delta_list_t *sdl, timer_info_t *info)
+static sample_delta_item_t inline *sample_find(sample_delta_list_t *sdl, const timer_info_t *info)
 {
 	link_t *link;
 
@@ -296,7 +298,7 @@ static int info_compare_total(const void *item1, const void *item2)
  *  pid_a_kernel_thread
  *
  */
-static bool pid_a_kernel_thread(pid_t id)
+static bool pid_a_kernel_thread(const pid_t id)
 {
 	char buffer[128];
 	char path[32];
@@ -313,7 +315,7 @@ static bool pid_a_kernel_thread(pid_t id)
  *  get_pid_cmdline
  * 	get process's /proc/pid/cmdline
  */
-static char *get_pid_cmdline(pid_t id)
+static char *get_pid_cmdline(const pid_t id)
 {
 	char buffer[4096];
 	char *ptr;
@@ -439,9 +441,9 @@ static void samples_dump(const char *filename, const int duration)
 		for (i = 0; i < n; i++) {
 			sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 			if (sdi)
-				fprintf(fp, ",%f", sdi->delta / dur);
+				fprintf(fp, ",%f", (double)sdi->delta / dur);
 			else
-				fprintf(fp,",");
+				fprintf(fp, ",%f", 0.0);
 		}
 		fprintf(fp, "\n");
 	}
@@ -480,7 +482,7 @@ static void samples_dump(const char *filename, const int duration)
 
 		fprintf(fp, "Average:");
 		for (i = 0; i < n; i++)
-			fprintf(fp, ",%f", ((double)sorted_timer_infos[i]->total / dur) / count);
+			fprintf(fp, ",%f", ((double)sorted_timer_infos[i]->total / dur) / (double)count);
 		fprintf(fp, "\n");
 
 		/*
@@ -488,7 +490,7 @@ static void samples_dump(const char *filename, const int duration)
 		 */
 		fprintf(fp, "Std.Dev.:");
 		for (i = 0; i < n; i++) {
-			double average = sorted_timer_infos[i]->total / count;
+			double average = (double)sorted_timer_infos[i]->total / (double)count;
 			double sum = 0.0;
 
 			for (link = sample_list.head; link; link = link->next) {
@@ -515,7 +517,7 @@ static void samples_dump(const char *filename, const int duration)
  *	try to find existing timer info in cache, and to the cache
  *	if it is new.
  */
-static timer_info_t *timer_info_find(timer_info_t *new_info)
+static timer_info_t *timer_info_find(const timer_info_t *new_info)
 {
 	link_t *link;
 	timer_info_t *info;
@@ -586,7 +588,7 @@ static void timer_info_list_free(void)
  *  hash_pjw()
  *	Hash a string, from Aho, Sethi, Ullman, Compiling Techniques.
  */
-static unsigned long hash_pjw(char *str)
+static unsigned long hash_pjw(const char *str)
 {
   	unsigned long h=0, g;
 
@@ -631,12 +633,12 @@ static void timer_stat_free_contents(
  */
 static void timer_stat_add(
 	timer_stat_t *timer_stats[],	/* timer stat hash table */
-	unsigned long count,		/* event count */
-	pid_t pid,			/* PID of task */
+	const unsigned long count,	/* event count */
+	const pid_t pid,		/* PID of task */
 	char *task,			/* Name of task */
 	char *func,			/* Kernel function */
 	char *callback,			/* Kernel timer callback */
-	bool kernel_thread)		/* Is a kernel thread */
+	const bool kernel_thread)	/* Is a kernel thread */
 {
 	char buf[4096];
 	timer_stat_t *ts;
@@ -732,7 +734,7 @@ static void timer_stat_sort_freq_add(
 static void timer_stat_diff(
 	const int duration,		/* time between each sample */
 	const int n_lines,		/* number of lines to output */
-	unsigned long whence,		/* nth sample */
+	const unsigned long whence,	/* nth sample */
 	timer_stat_t *timer_stats_old[],/* old timer stats samples */
 	timer_stat_t *timer_stats_new[])/* new timer stats samples */
 {

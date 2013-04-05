@@ -396,7 +396,7 @@ static void samples_dump(const char *filename, const int duration)
 	qsort(sorted_timer_infos, n, sizeof(timer_info_t *), info_compare_total);
 
 	fprintf(fp, "Task:");
-	for (i=0; i<n; i++) {
+	for (i = 0; i < n; i++) {
 		char *task;
 
 		if ((opt_flags & OPT_CMD) && (sorted_timer_infos[i]->cmdline != NULL))
@@ -409,17 +409,17 @@ static void samples_dump(const char *filename, const int duration)
 	fprintf(fp, "\n");
 
 	fprintf(fp, "Init Function:");
-	for (i=0; i<n; i++)
+	for (i = 0; i < n; i++)
 		fprintf(fp, ",%s", sorted_timer_infos[i]->func);
 	fprintf(fp, "\n");
 
 	fprintf(fp, "Callback:");
-	for (i=0; i<n; i++)
+	for (i = 0; i < n; i++)
 		fprintf(fp, ",%s", sorted_timer_infos[i]->callback);
 	fprintf(fp, "\n");
 
 	fprintf(fp, "Total:");
-	for (i=0; i<n; i++)
+	for (i = 0; i < n; i++)
 		fprintf(fp, ",%lu", sorted_timer_infos[i]->total);
 	fprintf(fp, "\n");
 
@@ -436,7 +436,7 @@ static void samples_dump(const char *filename, const int duration)
 		fprintf(fp, "%lu", sdl->whence);
 
 		/* Scan in timer info order to be consistent for all sdl rows */
-		for (i=0; i<n; i++) {
+		for (i = 0; i < n; i++) {
 			sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 			if (sdi)
 				fprintf(fp, ",%f", sdi->delta / dur);
@@ -479,7 +479,7 @@ static void samples_dump(const char *filename, const int duration)
 		fprintf(fp, "\n");
 
 		fprintf(fp, "Average:");
-		for (i=0; i<n; i++)
+		for (i = 0; i < n; i++)
 			fprintf(fp, ",%f", ((double)sorted_timer_infos[i]->total / dur) / count);
 		fprintf(fp, "\n");
 
@@ -611,7 +611,7 @@ static void timer_stat_free_contents(
 {
 	int i;
 
-	for (i=0; i<TABLE_SIZE; i++) {
+	for (i = 0; i < TABLE_SIZE; i++) {
 		timer_stat_t *ts = timer_stats[i];
 
 		while (ts) {
@@ -743,7 +743,7 @@ static void timer_stat_diff(
 
 	timer_stat_t *sorted = NULL;
 
-	for (i=0; i<TABLE_SIZE; i++) {
+	for (i = 0; i < TABLE_SIZE; i++) {
 		timer_stat_t *ts;
 
 		for (ts = timer_stats_new[i]; ts; ts = ts->next) {

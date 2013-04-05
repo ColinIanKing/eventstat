@@ -45,7 +45,7 @@
 #define OPT_DIRNAME_STRIP	(0x00000010)
 #define OPT_SAMPLE_COUNT	(0x00000020)
 #define OPT_RESULT_STATS	(0x00000040)
-#define OPT_CMD		(OPT_CMD_SHORT | OPT_CMD_LONG)
+#define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
 
 typedef struct link {
 	void *data;

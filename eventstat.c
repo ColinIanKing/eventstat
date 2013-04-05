@@ -893,15 +893,18 @@ void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 void show_usage(void)
 {
 	printf("%s, version %s\n\n", APP_NAME, VERSION);
-	printf("Usage: %s [-q] [-s] [-l] [-r file] [-n events] [-c] [-t thresh] [duration] [count]\n", APP_NAME);
-	printf("\t-c report cumulative events rather than events per second.\n");
-	printf("\t-h print this help.\n");
-	printf("\t-l use long cmdline text from /proc/pid/cmdline with CSV output.\n");
-	printf("\t-n specifies number of events to display.\n");
-	printf("\t-q run quietly, useful with option -r.\n");
-	printf("\t-r specifies a comma separated values (CSV) output file to dump samples into.\n");
-	printf("\t-s use short process name from /proc/pid/cmdline with CSV output.\n");
-	printf("\t-t samples less than the specified threshold are ignored.\n");
+	printf("Usage: %s [options] [duration] [count]\n", APP_NAME);
+	printf("Options are:\n");
+	printf("  -c\t\treport cumulative events rather than events per second.\n");
+	printf("  -C\t\treport event count rather than event per second in CSV output.\n");
+	printf("  -h\t\tprint this help.\n");
+	printf("  -l\t\tuse long cmdline text from /proc/pid/cmdline in CSV output.\n");
+	printf("  -n events\tspecifies number of events to display.\n");
+	printf("  -q\t\trun quietly, useful with option -r.\n");
+	printf("  -r filename\tspecifies a comma separated values (CSV) output file to dump samples into.\n");
+	printf("  -s\t\tuse short process name from /proc/pid/cmdline in CSV output.\n");
+	printf("  -S\t\tcalculate min, max, average and standard deviation in CSV output.\n");
+	printf("  -t threshold\tsamples less than the specified threshold are ignored.\n");
 }
 
 int main(int argc, char **argv)

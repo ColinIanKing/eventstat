@@ -369,7 +369,7 @@ static void samples_dump(const char *filename, const int duration)
 	sample_delta_list_t	*sdl;
 	timer_info_t **sorted_timer_infos;
 	link_t	*link;
-	int i = 0;
+	size_t i = 0;
 	size_t n = timer_info_list.length;
 	FILE *fp;
 	unsigned long count = 0;

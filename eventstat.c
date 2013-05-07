@@ -329,8 +329,10 @@ static char *get_pid_cmdline(const pid_t id)
 	if ((fd = open(buffer, O_RDONLY)) < 0)
 		return NULL;
 
-	if ((ret = read(fd, buffer, sizeof(buffer))) <= 0)
+	if ((ret = read(fd, buffer, sizeof(buffer))) <= 0) {
+		close(fd);
 		return NULL;
+	}
 
 	close(fd);
 

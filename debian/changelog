@@ -1,3 +1,10 @@
+eventstat (0.01.21-2) unstable; urgency=low
+
+  * Makefile: bump version
+  * eventstat: fix a fd leak on read fail error path
+
+ -- Colin King <colin.king@canonical.com>  Tue, 7 May 2013 15:36:22 +0100
+
 eventstat (0.01.21-1) unstable; urgency=low
 
   * Makefile: bump version

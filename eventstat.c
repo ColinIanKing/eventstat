@@ -434,6 +434,7 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 	FILE *fp;
 	unsigned long count = 0;
 	double dur;
+	bool dur_zero;
 
 	if (filename == NULL)
 		return;
@@ -491,6 +492,7 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 	 *  by scaling by 1.0 (i.e. no scaling).
 	 */
 	dur = (opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : timeval_double(duration);
+	dur_zero = (duration->tv_sec == 0) && (duration->tv_usec == 0);
 
 	for (link = sample_list.head; link; link = link->next) {
 		count++;
@@ -501,7 +503,7 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 		for (i = 0; i < n; i++) {
 			sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 			if (sdi)
-				fprintf(fp, ",%f", (double)sdi->delta / dur);
+				fprintf(fp, ",%f", dur_zero ? 0.0 : (double)sdi->delta / dur);
 			else
 				fprintf(fp, ",%f", 0.0);
 		}
@@ -522,7 +524,7 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 				if (sdi && min > sdi->delta)
 					min = sdi->delta;
 			}
-			fprintf(fp, ",%f", (double)min / dur);
+			fprintf(fp, ",%f", dur_zero ? 0.0 : (double)min / dur);
 		}
 		fprintf(fp, "\n");
 
@@ -536,13 +538,13 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 				if (sdi && max < sdi->delta)
 					max = sdi->delta;
 			}
-			fprintf(fp, ",%f", (double)max / dur);
+			fprintf(fp, ",%f", dur_zero ? 0.0 : (double)max / dur);
 		}
 		fprintf(fp, "\n");
 
 		fprintf(fp, "Average:");
 		for (i = 0; i < n; i++)
-			fprintf(fp, ",%f", ((double)sorted_timer_infos[i]->total / dur) / (double)count);
+			fprintf(fp, ",%f", dur_zero ? 0.0 : ((double)sorted_timer_infos[i]->total / dur) / (double)count);
 		fprintf(fp, "\n");
 
 		/*
@@ -557,7 +559,7 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 				sdl = (sample_delta_list_t*)link->data;
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 				if (sdi) {
-					double diff = ((double)sdi->delta - average) / dur;
+					double diff = dur_zero ? 0.0 : ((double)sdi->delta - average) / dur;
 					diff = diff * diff;
 					sum += diff;
 				}

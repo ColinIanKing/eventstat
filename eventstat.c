@@ -806,8 +806,6 @@ static void timer_stat_diff(
 	unsigned long kt_total = 0UL;
 	double dur = timeval_double(duration);
 
-	printf("DUR: %f whence: %d %d\n", dur, (int)whence->tv_sec, (int)whence->tv_usec);
-
 	timer_stat_t *sorted = NULL;
 
 	for (i = 0; i < TABLE_SIZE; i++) {

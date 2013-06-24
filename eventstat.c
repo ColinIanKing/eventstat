@@ -1086,6 +1086,13 @@ int main(int argc, char **argv)
 		tv = timeval_add(&tv, &tv1);
 		tv2 = tv = timeval_sub(&tv, &tv2);
 
+		/* Play catch-up, probably been asleep */
+		if (tv.tv_sec < 0) {
+			tv.tv_sec = 0;
+			tv.tv_usec = 0;
+			tv2 = tv;
+		}
+
 		ret = select(0, NULL, NULL, NULL, &tv2);
 		if (ret < 0) {
 			if (errno == EINTR) {

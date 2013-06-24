@@ -1,4 +1,15 @@
-eventstat (0.01.21-2) unstable; urgency=low
+eventstat (0.01.23-1) unstable; urgency=low
+
+  * Makefile: bump version
+  * eventstat.c: cater for -ve time if somebody suspended the process
+  * eventstat.c: handle zero duration corner case
+  * eventstat.c: remove 'N' new field, it's not helpful
+  * eventstat.c: remove debug
+  * eventstat.c: fix stats on SIGINT and missing first stats issue
+
+ -- Colin King <colin.king@canonical.com>  Tue, 7 May 2013 15:36:22 +0100
+
+eventstat (0.01.22-1) unstable; urgency=low
 
   * Makefile: bump version
   * eventstat: fix a fd leak on read fail error path

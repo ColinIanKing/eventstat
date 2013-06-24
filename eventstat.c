@@ -74,7 +74,6 @@ typedef struct timer_info {
 typedef struct timer_stat {
 	unsigned long	count;		/* Number of events */
 	unsigned long	delta;		/* Change in events since last time */
-	bool		old;		/* Existing event, not a new one */
 	timer_info_t	*info;		/* Timer info */
 	struct timer_stat *next;	/* Next timer stat in hash table */
 	struct timer_stat *sorted_freq_next;	/* Next timer stat in event frequency sorted list */
@@ -817,7 +816,6 @@ static void timer_stat_diff(
 			if (found) {
 				ts->delta = ts->count - found->count;
 				if (ts->delta >= opt_threshold) {
-					ts->old = true;
 					timer_stat_sort_freq_add(&sorted, ts);
 					sample_add(ts, whence);
 					found->info->total += ts->delta;
@@ -825,7 +823,6 @@ static void timer_stat_diff(
 			} else {
 				ts->delta = ts->count;
 				if (ts->delta >= opt_threshold) {
-					ts->old = false;
 					timer_stat_sort_freq_add(&sorted, ts);
 					sample_add(ts, whence);
 				}
@@ -842,14 +839,12 @@ static void timer_stat_diff(
 			if (((n_lines == -1) || (j < n_lines)) && (sorted->delta != 0)) {
 				j++;
 				if (opt_flags & OPT_CUMULATIVE) {
-					printf("%1s %6lu %5d %-15s %-25s %-s\n",
-						sorted->old ? " " : "N",
+					printf("%8lu %5d %-15s %-25s %-s\n",
 						sorted->count,
 						sorted->info->pid, sorted->info->task,
 						sorted->info->func, sorted->info->callback);
 				} else {
-					printf("%1s %6.2f %5d %-15s %-25s %-s\n",
-						sorted->old ? " " : "N",
+					printf("%8.2f %5d %-15s %-25s %-s\n",
 						(double)sorted->delta / dur,
 						sorted->info->pid, sorted->info->task,
 						sorted->info->func, sorted->info->callback);

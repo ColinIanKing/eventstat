@@ -88,16 +88,72 @@ typedef struct sample_delta_item {
 
 /* list of sample_delta_items */
 typedef struct sample_delta_list {
-	unsigned long		whence;	/* when the sample was taken */
-	list_t			list;
+	struct timeval 	whence;		/* when the sample was taken */
+	list_t		list;
 } sample_delta_list_t;
 
 static list_t timer_info_list;		/* cache list of timer_info */
 static list_t sample_list;		/* list of samples, sorted in sample time order */
 static char *csv_results;		/* results in comma separated values */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
-static unsigned long opt_threshold;	/* ignore samples with event delta less than this */
+static double  opt_threshold;		/* ignore samples with event delta less than this */
 static unsigned int opt_flags;		/* option flags */
+
+/*
+ *  timeval_sub()
+ *	timeval a - b
+ */
+static struct timeval timeval_sub(const struct timeval *a, const struct timeval *b)
+{
+	struct timeval ret, _b;
+
+	_b.tv_sec = b->tv_sec;
+	_b.tv_usec = b->tv_usec;
+
+	if (a->tv_usec < _b.tv_usec) {
+		int nsec = ((_b.tv_usec - a->tv_usec) / 1000000) + 1;
+		_b.tv_sec += nsec;
+		_b.tv_usec -= (1000000 * nsec);
+	}
+	if (a->tv_usec - _b.tv_usec > 1000000) {
+		int nsec = (a->tv_usec - _b.tv_usec) / 1000000;
+		_b.tv_sec -= nsec;
+		_b.tv_usec += (1000000 * nsec);
+	}
+
+	ret.tv_sec = a->tv_sec - _b.tv_sec;
+	ret.tv_usec = a->tv_usec - _b.tv_usec;
+
+	return ret;
+}
+
+/*
+ *  timeval_sub()
+ *	timeval a + b
+ */
+static struct timeval timeval_add(const struct timeval *a, const struct timeval *b)
+{
+	struct timeval ret;
+
+	ret.tv_sec = a->tv_sec + b->tv_sec;
+	ret.tv_usec = a->tv_usec + b->tv_usec;
+	if (ret.tv_usec > 1000000) {
+		int nsec = (ret.tv_usec / 1000000);
+		ret.tv_sec += nsec;
+		ret.tv_usec -= (1000000 * nsec);
+	}
+
+	return ret;
+}
+
+/*
+ *  timeval_double
+ *	timeval to a double
+ */
+static inline double timeval_double(const struct timeval *tv)
+{
+	return (double)tv->tv_sec + ((double)tv->tv_usec / 1000000.0);
+}
 
 /*
  *  set_timer_stat()
@@ -226,7 +282,7 @@ static void samples_free(void)
  *  sample_add()
  *	add a timer_stat's delta and info field to a list at time position whence
  */
-static void sample_add(timer_stat_t *timer_stat, const unsigned long whence)
+static void sample_add(timer_stat_t *timer_stat, struct timeval *whence)
 {
 	link_t	*link;
 	bool	found = false;
@@ -238,7 +294,8 @@ static void sample_add(timer_stat_t *timer_stat, const unsigned long whence)
 
 	for (link = sample_list.head; link; link = link->next) {
 		sdl = (sample_delta_list_t*)link->data;
-		if (sdl->whence == whence) {
+		if ((sdl->whence.tv_sec == whence->tv_sec) &&
+		    (sdl->whence.tv_usec == whence->tv_usec)) {
 			found = true;
 			break;
 		}
@@ -253,7 +310,7 @@ static void sample_add(timer_stat_t *timer_stat, const unsigned long whence)
 			fprintf(stderr, "Cannot allocate sample delta list\n");
 			eventstat_exit(EXIT_FAILURE);
 		}
-		sdl->whence = whence;
+		sdl->whence = *whence;
 		list_append(&sample_list, sdl);
 	}
 
@@ -368,7 +425,7 @@ static char *get_pid_cmdline(const pid_t id)
  *  samples_dump()
  *	dump out collected sample information
  */
-static void samples_dump(const char *filename, const int duration)
+static void samples_dump(const char *filename, const struct timeval *duration)
 {
 	sample_delta_list_t	*sdl;
 	timer_info_t **sorted_timer_infos;
@@ -434,12 +491,12 @@ static void samples_dump(const char *filename, const int duration)
 	 *  per sample duration time, instead give the raw sample count
 	 *  by scaling by 1.0 (i.e. no scaling).
 	 */
-	dur = (opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : (double)duration;
+	dur = (opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : timeval_double(duration);
 
 	for (link = sample_list.head; link; link = link->next) {
 		count++;
 		sdl = (sample_delta_list_t*)link->data;
-		fprintf(fp, "%lu", sdl->whence);
+		fprintf(fp, "%f", timeval_double(&sdl->whence));
 
 		/* Scan in timer info order to be consistent for all sdl rows */
 		for (i = 0; i < n; i++) {
@@ -697,9 +754,10 @@ static timer_stat_t *timer_stat_find(
 		needle->info->pid, needle->info->task,
 		needle->info->func, needle->info->callback);
 
-	for (ts = haystack[hash_pjw(buf)]; ts; ts = ts->next)
+	for (ts = haystack[hash_pjw(buf)]; ts; ts = ts->next) {
 		if (strcmp(ts->info->ident, buf) == 0)
 			return ts;
+	}
 
 	return NULL;	/* no success */
 }
@@ -736,9 +794,9 @@ static void timer_stat_sort_freq_add(
  *	silently die
  */
 static void timer_stat_diff(
-	const int duration,		/* time between each sample */
+	struct timeval *duration,	/* time between each sample */
 	const int n_lines,		/* number of lines to output */
-	const unsigned long whence,	/* nth sample */
+	struct timeval *whence,		/* nth sample */
 	timer_stat_t *timer_stats_old[],/* old timer stats samples */
 	timer_stat_t *timer_stats_new[])/* new timer stats samples */
 {
@@ -746,6 +804,9 @@ static void timer_stat_diff(
 	int j = 0;
 	unsigned long total = 0UL;
 	unsigned long kt_total = 0UL;
+	double dur = timeval_double(duration);
+
+	printf("DUR: %f whence: %d %d\n", dur, (int)whence->tv_sec, (int)whence->tv_usec);
 
 	timer_stat_t *sorted = NULL;
 
@@ -764,7 +825,7 @@ static void timer_stat_diff(
 					found->info->total += ts->delta;
 				}
 			} else {
-				ts->delta = 0;
+				ts->delta = ts->count;
 				if (ts->delta >= opt_threshold) {
 					ts->old = false;
 					timer_stat_sort_freq_add(&sorted, ts);
@@ -791,7 +852,7 @@ static void timer_stat_diff(
 				} else {
 					printf("%1s %6.2f %5d %-15s %-25s %-s\n",
 						sorted->old ? " " : "N",
-						(double)sorted->delta / (double)duration,
+						(double)sorted->delta / dur,
 						sorted->info->pid, sorted->info->task,
 						sorted->info->func, sorted->info->callback);
 				}
@@ -803,9 +864,9 @@ static void timer_stat_diff(
 			sorted = sorted->sorted_freq_next;
 		}
 		printf("%lu Total events, %5.2f events/sec (kernel: %5.2f, userspace: %5.2f)\n\n",
-			total, (double)total / duration,
-			(double)kt_total / duration,
-			(double)(total - kt_total) / duration);
+			total, (double)total / dur,
+			(double)kt_total / dur,
+			(double)(total - kt_total) / dur);
 	}
 }
 
@@ -916,12 +977,11 @@ void show_usage(void)
 int main(int argc, char **argv)
 {
 	timer_stat_t **timer_stats_old, **timer_stats_new, **tmp;
-	int duration = 1;
+	double duration_secs = 1.0;
 	int count = 1;
 	int n_lines = -1;
-	unsigned long whence = 0;
 	bool forever = true;
-	struct timeval tv1, tv2;
+	struct timeval tv1, tv2, duration, whence;
 
 	list_init(&timer_info_list);
 	list_init(&sample_list);
@@ -976,9 +1036,9 @@ int main(int argc, char **argv)
 	}
 
 	if (optind < argc) {
-		duration = atoi(argv[optind++]);
-		if (duration < 1) {
-			fprintf(stderr, "Duration must be > 0\n");
+		duration_secs = atof(argv[optind++]);
+		if (duration_secs < 0.5) {
+			fprintf(stderr, "Duration must 0.5 or more.\n");
 			eventstat_exit(EXIT_FAILURE);
 		}
 	}
@@ -992,7 +1052,9 @@ int main(int argc, char **argv)
 		}
 	}
 
-	opt_threshold *= duration;
+	duration.tv_sec = (time_t)duration_secs;
+	duration.tv_usec = (suseconds_t)(duration_secs * 1000000.0) - (duration.tv_sec * 1000000);
+	opt_threshold *= duration_secs;
 
 	if (geteuid() != 0) {
 		fprintf(stderr, "%s requires root privileges to write to %s\n",
@@ -1013,24 +1075,35 @@ int main(int argc, char **argv)
 
 	/* Should really catch signals and set back to zero before we die */
 	set_timer_stat("1", true);
-	sleep(1);
-
 	gettimeofday(&tv1, NULL);
 	get_events(timer_stats_old);
 
+	whence.tv_sec = 0;
+	whence.tv_usec = 0;
+
 	while (!stop_eventstat && (forever || count--)) {
-		suseconds_t usec;
+		struct timeval tv;
+		int ret;
 
 		gettimeofday(&tv2, NULL);
-		usec = ((tv1.tv_sec + whence + duration - tv2.tv_sec) * 1000000) +
-		       (tv1.tv_usec - tv2.tv_usec);
-		tv2.tv_sec = usec / 1000000;
-		tv2.tv_usec = usec % 1000000;
 
-		select(0, NULL, NULL, NULL, &tv2);
+		tv = timeval_add(&duration, &whence);
+		tv = timeval_add(&tv, &tv1);
+		tv2 = tv = timeval_sub(&tv, &tv2);
+
+		ret = select(0, NULL, NULL, NULL, &tv2);
+		if (ret < 0) {
+			if (errno == EINTR) {
+				duration = timeval_sub(&tv, &tv2);
+				stop_eventstat = true;
+			} else {
+				fprintf(stderr, "Select failed: %s\n", strerror(errno));
+				break;
+			}
+		}
 
 		get_events(timer_stats_new);
-		timer_stat_diff(duration, n_lines, whence,
+		timer_stat_diff(&duration, n_lines, &whence,
 			timer_stats_old, timer_stats_new);
 		timer_stat_free_contents(timer_stats_old);
 
@@ -1038,10 +1111,10 @@ int main(int argc, char **argv)
 		timer_stats_old = timer_stats_new;
 		timer_stats_new = tmp;
 
-		whence += duration;
+		whence = timeval_add(&duration, &whence);
 	}
 
-	samples_dump(csv_results, duration);
+	samples_dump(csv_results, &duration);
 
 	timer_stat_free_contents(timer_stats_old);
 	timer_stat_free_contents(timer_stats_new);

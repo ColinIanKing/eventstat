@@ -158,7 +158,7 @@ static inline double timeval_double(const struct timeval *tv)
  *  set_timer_stat()
  *	enable/disable timer stat
  */
-void set_timer_stat(const char *str, const bool carp)
+static void set_timer_stat(const char *str, const bool carp)
 {
 	FILE *fp;
 
@@ -177,13 +177,13 @@ void set_timer_stat(const char *str, const bool carp)
 /*
  *  Stop gcc complaining about no return func
  */
-void eventstat_exit(const int status) __attribute__ ((noreturn));
+static void eventstat_exit(const int status) __attribute__ ((noreturn));
 
 /*
  *  eventstat_exit()
  *	exit and set timer stat to 0
  */
-void eventstat_exit(const int status)
+static void eventstat_exit(const int status)
 {
 	set_timer_stat("0", false);
 
@@ -871,7 +871,7 @@ static void timer_stat_diff(
  *	scan /proc/timer_stats and populate a timer stat hash table with
  *	unique events
  */
-void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
+static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 {
 	FILE *fp;
 	char buf[4096];
@@ -953,7 +953,7 @@ void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
  *  show_usage()
  *	show how to use
  */
-void show_usage(void)
+static void show_usage(void)
 {
 	printf("%s, version %s\n\n", APP_NAME, VERSION);
 	printf("Usage: %s [options] [duration] [count]\n", APP_NAME);

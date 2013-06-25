@@ -36,7 +36,7 @@
 
 #define APP_NAME		"eventstat"
 #define TIMER_STATS		"/proc/timer_stats"
-#define TABLE_SIZE		(1997)		/* Should be a prime */
+#define TABLE_SIZE		(32771)		/* Should be a prime */
 
 #define OPT_QUIET		(0x00000001)
 #define OPT_CUMULATIVE		(0x00000002)

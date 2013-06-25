@@ -604,7 +604,7 @@ static timer_info_t *timer_info_find(const timer_info_t *new_info)
 	info->callback = strdup(new_info->callback);
 	info->ident = strdup(new_info->ident);
 	info->kernel_thread = new_info->kernel_thread;
-	info->total = 0;
+	info->total = new_info->total;
 
 	if (info->task == NULL ||
 	    info->func == NULL ||
@@ -731,6 +731,7 @@ static void timer_stat_add(
 	info.callback = callback;
 	info.ident = buf;
 	info.kernel_thread = kernel_thread;
+	info.total = count;
 
 	ts_new->count  = count;
 	ts_new->info = timer_info_find(&info);

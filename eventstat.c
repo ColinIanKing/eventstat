@@ -960,6 +960,7 @@ static void show_usage(void)
 	printf("Options are:\n");
 	printf("  -c\t\treport cumulative events rather than events per second.\n");
 	printf("  -C\t\treport event count rather than event per second in CSV output.\n");
+	printf("  -d\t\tremove pathname from long process name in CSV output.\n");
 	printf("  -h\t\tprint this help.\n");
 	printf("  -l\t\tuse long cmdline text from /proc/pid/cmdline in CSV output.\n");
 	printf("  -n events\tspecifies number of events to display.\n");

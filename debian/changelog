@@ -1,3 +1,10 @@
+eventstat (0.01.25-1) unstable; urgency=low
+
+  * eventstat: work around proc info containerisation restrictions
+  * eventstat.c: Add -d to short help info
+
+ -- Colin King <colin.king@canonical.com>  Wed, 26 Jun 2013 18:06:12 +0100
+
 eventstat (0.01.24-1) unstable; urgency=low
 
   * Makefile: bump version

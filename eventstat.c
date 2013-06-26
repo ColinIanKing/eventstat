@@ -91,12 +91,61 @@ typedef struct sample_delta_list {
 	list_t		list;
 } sample_delta_list_t;
 
+typedef struct {
+	char *task;			/* Name of kernel task */
+	size_t len;			/* Length */
+} kernel_task_info;
+
+#define KERN_TASK_INFO(str)		{ str, sizeof(str) - 1 }
+
 static list_t timer_info_list;		/* cache list of timer_info */
 static list_t sample_list;		/* list of samples, sorted in sample time order */
 static char *csv_results;		/* results in comma separated values */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
 static double  opt_threshold;		/* ignore samples with event delta less than this */
 static unsigned int opt_flags;		/* option flags */
+static bool sane_procs;			/* false if we are in a container */
+
+/*
+ *  sane_proc_pid_info()
+ *	detect if proc info mapping from /proc/timer_stats
+ *	maps to proc pids OK. If we are in a container or
+ *	we can't tell, return false.
+ */
+static bool sane_proc_pid_info(void)
+{
+	FILE *fp;
+	static const char pattern[] = "container=";
+	const char *ptr = pattern;
+	bool ret = true;
+
+	fp = fopen("/proc/1/environ", "r");
+	if (!fp)
+		return false;
+
+	while (!feof(fp)) {
+		int ch = getc(fp);
+
+		if (*ptr == ch) {
+			ptr++;
+			/* Match? So we're inside a container */
+			if (*ptr == '\0') {
+				ret = false;
+				break;
+			}
+		} else {
+			/* No match, skip to end of var and restart scan */
+			do {
+				ch = getc(fp);
+			} while ((ch != EOF) && (ch != '\0'));
+			ptr = pattern;
+		}
+	}
+
+	fclose(fp);
+
+	return ret;
+}
 
 /*
  *  timeval_sub()
@@ -356,15 +405,57 @@ static int info_compare_total(const void *item1, const void *item2)
  *  pid_a_kernel_thread
  *
  */
-static bool pid_a_kernel_thread(const pid_t id)
+static bool pid_a_kernel_thread(const char *task, const pid_t id)
 {
 	char buffer[128];
 	char path[32];
 
-	snprintf(buffer, sizeof(buffer), "/proc/%d/exe", id);
-	if (readlink(buffer, path, sizeof(path)) < 0)
-		if (errno == ENOENT)
-			return true;
+	if (sane_procs) {
+		snprintf(buffer, sizeof(buffer), "/proc/%d/exe", id);
+		if (readlink(buffer, path, sizeof(path)) < 0)
+			if (errno == ENOENT)
+				return true;
+	} else {
+		/* In side a container, make a guess at kernel threads */
+		int i;
+
+		/*
+		 * This is not exactly accurate, but if we can't look up
+		 * a process then try and infer something from the comm field.
+		 * Until we have better kernel support to map /proc/timer_stats
+		 * pids to containerised pids this is the best we can do.
+		 */
+		static kernel_task_info kernel_tasks[] = {
+			KERN_TASK_INFO("swapper/"),
+			KERN_TASK_INFO("kworker/"),
+			KERN_TASK_INFO("ksoftirqd/"),
+			KERN_TASK_INFO("watchdog/"),
+			KERN_TASK_INFO("migration/"),
+			KERN_TASK_INFO("irq/"),
+			KERN_TASK_INFO("mmcqd/"),
+			KERN_TASK_INFO("jbd2/"),
+			KERN_TASK_INFO("kthreadd"),
+			KERN_TASK_INFO("kthrotld"),
+			KERN_TASK_INFO("kswapd"),
+			KERN_TASK_INFO("ecryptfs-kthrea"),
+			KERN_TASK_INFO("kauditd"),
+			KERN_TASK_INFO("kblockd"),
+			KERN_TASK_INFO("kcryptd"),
+			KERN_TASK_INFO("kdevtmpfs"),
+			KERN_TASK_INFO("khelper"),
+			KERN_TASK_INFO("khubd"),
+			KERN_TASK_INFO("khugepaged"),
+			KERN_TASK_INFO("khungtaskd"),
+			KERN_TASK_INFO("flush-"),
+			KERN_TASK_INFO("bdi-default-"),
+			{ NULL, 0 }
+		};
+
+		for (i = 0; kernel_tasks[i].task != NULL; i++) {
+			if (strncmp(task, kernel_tasks[i].task, kernel_tasks[i].len) == 0)
+				return true;
+		}
+	}
 
 	return false;
 }
@@ -859,10 +950,13 @@ static void timer_stat_diff(
 
 			sorted = sorted->sorted_freq_next;
 		}
-		printf("%lu Total events, %5.2f events/sec (kernel: %5.2f, userspace: %5.2f)\n\n",
+		printf("%lu Total events, %5.2f events/sec (kernel: %5.2f, userspace: %5.2f)\n",
 			total, (double)total / dur,
 			(double)kt_total / dur,
 			(double)(total - kt_total) / dur);
+		if (!sane_procs)
+			printf("Note: this was run inside a container, kernel tasks were guessed.\n");
+		printf("\n");
 	}
 }
 
@@ -915,20 +1009,13 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 		sscanf(buf, "%lu", &count);
 		sscanf(ptr, "%d %s %s (%[^)])", &pid, task, func, timer);
 
-		kernel_thread = pid_a_kernel_thread(pid);
+		kernel_thread = pid_a_kernel_thread(task, pid);
 
 		if (kernel_thread) {
 			char tmp[64];
 			task[13] = '\0';
 			snprintf(tmp, sizeof(tmp), "[%s]", task);
 			strcpy(task, tmp);
-		}
-
-		if (strcmp(task, "swapper") == 0 &&
-		    strcmp(func, "hrtimer_start_range_ns") == 0 &&
-		    strcmp(timer, "tick_sched_timer") == 0) {
-			strcpy(task, "[kern sched]");
-			strcpy(func, "Load balancing tick");
 		}
 
 		if (strcmp(task, "insmod") == 0)
@@ -1058,6 +1145,10 @@ int main(int argc, char **argv)
 			APP_NAME, TIMER_STATS);
 		eventstat_exit(EXIT_FAILURE);
 	}
+
+	sane_procs = sane_proc_pid_info();
+	if (!sane_procs)
+		opt_flags &= ~(OPT_CMD_SHORT | OPT_CMD_LONG);
 
 	signal(SIGINT, &handle_sigint);
 

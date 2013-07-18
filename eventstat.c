@@ -176,7 +176,7 @@ static struct timeval timeval_sub(const struct timeval *a, const struct timeval 
 }
 
 /*
- *  timeval_sub()
+ *  timeval_add()
  *	timeval a + b
  */
 static struct timeval timeval_add(const struct timeval *a, const struct timeval *b)

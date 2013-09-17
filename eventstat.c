@@ -408,13 +408,22 @@ static int info_compare_total(const void *item1, const void *item2)
 static bool pid_a_kernel_thread(const char *task, const pid_t id)
 {
 	char buffer[128];
-	char path[32];
+	char path[128];
 
 	if (sane_procs) {
-		snprintf(buffer, sizeof(buffer), "/proc/%d/exe", id);
-		if (readlink(buffer, path, sizeof(path)) < 0)
+		int piddir;
+		bool ret = false;
+
+		snprintf(buffer, sizeof(buffer), "/proc/%d", id);
+		if ((piddir = openat(0, buffer, O_RDONLY)) < 0)
+			return ret;	/* it's no more, who knows what it was */
+		
+		if (readlinkat(piddir, "exe", path, sizeof(path)) < 0) 
 			if (errno == ENOENT)
-				return true;
+				ret = true;
+		
+		close(piddir);
+		return ret;
 	} else {
 		/* In side a container, make a guess at kernel threads */
 		int i;
@@ -480,7 +489,6 @@ static char *get_pid_cmdline(const pid_t id)
 		close(fd);
 		return NULL;
 	}
-
 	close(fd);
 
 	buffer[sizeof(buffer)-1] = '\0';
@@ -1007,9 +1015,14 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 
 		ptr++;
 		sscanf(buf, "%lu", &count);
-		sscanf(ptr, "%d %s %s (%[^)])", &pid, task, func, timer);
+		if (sscanf(ptr, "%d %s %s (%[^)])", &pid, task, func, timer) != 4)
+			continue;
 
 		kernel_thread = pid_a_kernel_thread(task, pid);
+
+		/* Swapper is special, like all corner cases */
+		if (strncmp(task, "swapper", 6) == 0)
+			kernel_thread = true;
 
 		if (kernel_thread) {
 			char tmp[64];
@@ -1022,8 +1035,6 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 			strcpy(task, "[kern mod]");
 		if (strcmp(task, "modprobe") == 0)
 			strcpy(task, "[kern mod]");
-		if (strcmp(task, "swapper") == 0)
-			strcpy(task, "[kern core]");
 
 		if ((strncmp(func, "tick_nohz_", 10) == 0) ||
 		    (strncmp(func, "tick_setup_sched_timer", 20) == 0) ||

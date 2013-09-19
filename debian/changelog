@@ -1,3 +1,10 @@
+eventstat (0.01.27-1) unstable; urgency=low
+
+  * Makefile: bump version
+  * eventstat: fix kernel thread detection issue (LP: #1226787)
+
+ -- Colin King <colin.king@canonical.com>  Thu, 19 Sep 2013 16:05:06 +0100
+
 eventstat (0.01.26-1) unstable; urgency=low
 
   * Makefile: bump version

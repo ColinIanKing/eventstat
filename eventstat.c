@@ -407,26 +407,16 @@ static int info_compare_total(const void *item1, const void *item2)
  */
 static bool pid_a_kernel_thread(const char *task, const pid_t id)
 {
-	char buffer[128];
-	char path[128];
-
 	if (sane_procs) {
-		int piddir;
-		bool ret = false;
-
-		snprintf(buffer, sizeof(buffer), "/proc/%d", id);
-		if ((piddir = openat(0, buffer, O_RDONLY)) < 0)
-			return ret;	/* it's no more, who knows what it was */
-		
-		if (readlinkat(piddir, "exe", path, sizeof(path)) < 0) 
-			if (errno == ENOENT)
-				ret = true;
-		
-		close(piddir);
-		return ret;
+		return getpgid(id) == 0;
 	} else {
 		/* In side a container, make a guess at kernel threads */
 		int i;
+		pid_t pgid = getpgid(id);
+
+		/* This fails for kernel threads inside a container */
+		if (pgid >= 0)
+			return pgid == 0;
 
 		/*
 		 * This is not exactly accurate, but if we can't look up

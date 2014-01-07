@@ -1,3 +1,12 @@
+eventstat (0.01.28-1) unstable; urgency=low
+
+  * Makefile: bump version
+  * Update copyright year
+  * Makefile: add -Wextra
+  * Simplify kernel thread detection for the common path
+
+ -- Colin King <colin.king@canonical.com>  Tue, 7 Jan 2014 17:10:00 +0000
+
 eventstat (0.01.27-1) unstable; urgency=low
 
   * Makefile: bump version

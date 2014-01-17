@@ -46,6 +46,8 @@
 #define OPT_SAMPLE_COUNT	(0x00000020)
 #define OPT_RESULT_STATS	(0x00000040)
 #define OPT_BRIEF		(0x00000080)
+#define OPT_KERNEL		(0x00000100)
+#define OPT_USER		(0x00000200)
 #define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
 
 typedef struct link {
@@ -994,6 +996,7 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 		char func[128];
 		char timer[128];
 		bool kernel_thread;
+		int mask;
 
 		if (fgets(buf, sizeof(buf), fp) == NULL)
 			break;
@@ -1025,6 +1028,11 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 		/* Swapper is special, like all corner cases */
 		if (strncmp(task, "swapper", 6) == 0)
 			kernel_thread = true;
+
+		mask = kernel_thread ? OPT_KERNEL : OPT_USER;
+
+		if (!(opt_flags & mask))
+			continue;
 
 		if (kernel_thread) {
 			char tmp[64];
@@ -1084,7 +1092,7 @@ int main(int argc, char **argv)
 	list_init(&sample_list);
 
 	for (;;) {
-		int c = getopt(argc, argv, "bcCdsSlhn:qr:t:");
+		int c = getopt(argc, argv, "bcCdksSlhn:qr:t:u");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -1132,8 +1140,17 @@ int main(int argc, char **argv)
 		case 'l':
 			opt_flags |= OPT_CMD_LONG;
 			break;
+		case 'k':
+			opt_flags |= OPT_KERNEL;
+			break;
+		case 'u':
+			opt_flags |= OPT_USER;
+			break;
 		}
 	}
+
+	if (!(opt_flags & (OPT_KERNEL | OPT_USER)))
+		opt_flags |= (OPT_KERNEL | OPT_USER);
 
 	if (optind < argc) {
 		duration_secs = atof(argv[optind++]);

@@ -52,6 +52,11 @@ just the process name.
 report long process name from /proc/pid/cmdline in CSV output. This reports
 the process name and all the command line arguments.
 .TP
+.B \-b
+just report events, PID and process name. By default the short task name from
+the kernel comm field will be displayed, however the \-s and \-l options 
+will report more process name information.
+.TP
 .B \-C
 report the sample event count in the CSV output rather than the default
 events per second rate.

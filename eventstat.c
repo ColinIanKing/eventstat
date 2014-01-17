@@ -45,6 +45,7 @@
 #define OPT_DIRNAME_STRIP	(0x00000010)
 #define OPT_SAMPLE_COUNT	(0x00000020)
 #define OPT_RESULT_STATS	(0x00000040)
+#define OPT_BRIEF		(0x00000080)
 #define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
 
 typedef struct link {
@@ -923,21 +924,32 @@ static void timer_stat_diff(
 	}
 
 	if (!(opt_flags & OPT_QUIET)) {
-		printf("%8s %-5s %-15s %-25s %-s\n",
-			opt_flags & OPT_CUMULATIVE ? "Events" : "Event/s",
-			"PID", "Task", "Init Function", "Callback");
+		printf("%8s %-5s %-15s",
+			opt_flags & OPT_CUMULATIVE ? "Events" : "Event/s", "PID", "Task");
+		if (!(opt_flags & OPT_BRIEF))
+			printf(" %-25s %-s\n",
+				"Init Function", "Callback");
+		else
+			printf("\n");
 
 		while (sorted) {
 			if (((n_lines == -1) || (j < n_lines)) && (sorted->delta != 0)) {
 				j++;
-				if (opt_flags & OPT_CUMULATIVE) {
-					printf("%8lu %5d %-15s %-25s %-s\n",
-						sorted->count,
-						sorted->info->pid, sorted->info->task,
-						sorted->info->func, sorted->info->callback);
+				if (opt_flags & OPT_CUMULATIVE)
+					printf("%8lu ", sorted->count);
+				else
+					printf("%8.2f ", (double)sorted->delta / dur);
+
+				if (opt_flags & OPT_BRIEF) {
+					char *cmd = sorted->info->cmdline ?
+						sorted->info->cmdline : sorted->info->task;
+
+					printf("%5d %s\n",
+						sorted->info->pid,
+						opt_flags & OPT_CMD ?
+							cmd : sorted->info->task);
 				} else {
-					printf("%8.2f %5d %-15s %-25s %-s\n",
-						(double)sorted->delta / dur,
+					printf("%5d %-15s %-25s %-s\n",
 						sorted->info->pid, sorted->info->task,
 						sorted->info->func, sorted->info->callback);
 				}
@@ -1072,10 +1084,13 @@ int main(int argc, char **argv)
 	list_init(&sample_list);
 
 	for (;;) {
-		int c = getopt(argc, argv, "cCdsSlhn:qr:t:");
+		int c = getopt(argc, argv, "bcCdsSlhn:qr:t:");
 		if (c == -1)
 			break;
 		switch (c) {
+		case 'b':
+			opt_flags |= OPT_BRIEF;
+			break;
 		case 'c':
 			opt_flags |= OPT_CUMULATIVE;
 			break;

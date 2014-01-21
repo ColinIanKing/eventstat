@@ -1,3 +1,12 @@
+eventstat (0.01.29-1) unstable; urgency=low
+
+  * Makefile: bump version
+  * debian control: update standards version
+  * Add -u and -k options
+  * Add the -b brief output option
+
+ -- Colin King <colin.king@canonical.com>  Tue, 21 Jan 2014 11:01:00 +0000
+
 eventstat (0.01.28-1) unstable; urgency=low
 
   * Makefile: bump version

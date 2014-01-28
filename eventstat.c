@@ -744,9 +744,10 @@ static void timer_info_list_free(void)
  */
 static unsigned long hash_pjw(const char *str)
 {
-  	unsigned long h=0, g;
+  	unsigned long h = 0;
 
 	while (*str) {
+		unsigned long g;
 		h = (h << 4) + (*str);
 		if (0 != (g = h&0xf0000000)) {
 			h = h ^ (g >> 24);
@@ -895,9 +896,6 @@ static void timer_stat_diff(
 	timer_stat_t *timer_stats_new[])/* new timer stats samples */
 {
 	int i;
-	int j = 0;
-	unsigned long total = 0UL;
-	unsigned long kt_total = 0UL;
 	double dur = timeval_double(duration);
 
 	timer_stat_t *sorted = NULL;
@@ -926,6 +924,9 @@ static void timer_stat_diff(
 	}
 
 	if (!(opt_flags & OPT_QUIET)) {
+		unsigned long total = 0UL, kt_total = 0UL;
+		int j = 0;
+
 		printf("%8s %-5s %-15s",
 			opt_flags & OPT_CUMULATIVE ? "Events" : "Event/s", "PID", "Task");
 		if (!(opt_flags & OPT_BRIEF))

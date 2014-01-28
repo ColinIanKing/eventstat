@@ -1020,8 +1020,11 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 			continue;	/* Deferred event, skip */
 
 		ptr++;
-		sscanf(buf, "%lu", &count);
-		if (sscanf(ptr, "%d %s %s (%[^)])", &pid, task, func, timer) != 4)
+		sscanf(buf, "%21lu", &count);
+		memset(task, 0, sizeof(task));
+		memset(func, 0, sizeof(func));
+		memset(timer, 0, sizeof(timer));
+		if (sscanf(ptr, "%10d %63s %127s (%127[^)])", &pid, task, func, timer) != 4)
 			continue;
 
 		kernel_thread = pid_a_kernel_thread(task, pid);

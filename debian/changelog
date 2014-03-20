@@ -1,3 +1,12 @@
+eventstat (0.01.31-1) unstable; urgency=low
+
+  * Makefile: bump version
+  * Makefile: Fix make dist, use plain old tar to omit debian contents
+  * Fix copyright
+  * Add COPYING file
+
+ -- Colin King <colin.king@canonical.com>  Thu, 20 Mar 2014 13:22:31 +0000
+
 eventstat (0.01.30-1) unstable; urgency=low
 
   * Makefile: bump version

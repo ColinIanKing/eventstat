@@ -1,3 +1,12 @@
+eventstat (0.01.32-1) unstable; urgency=low
+
+  * Makefile: bump version
+  * Handle overflow/underflow invalid values for count arg
+  * Handle overflow/underflow invalid values for -n option
+  * Handle bad options with help and exit failure
+
+ -- Colin King <colin.king@canonical.com>  Sun, 18 May 2014 23:59:49 +0100
+
 eventstat (0.01.31-1) unstable; urgency=low
 
   * Makefile: bump version

@@ -1150,6 +1150,9 @@ int main(int argc, char **argv)
 		case 'u':
 			opt_flags |= OPT_USER;
 			break;
+		default:
+			show_usage();
+			eventstat_exit(EXIT_FAILURE);
 		}
 	}
 

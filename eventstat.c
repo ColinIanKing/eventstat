@@ -890,7 +890,7 @@ static void timer_stat_sort_freq_add(
  */
 static void timer_stat_diff(
 	struct timeval *duration,	/* time between each sample */
-	const int n_lines,		/* number of lines to output */
+	const long int n_lines,		/* number of lines to output */
 	struct timeval *whence,		/* nth sample */
 	timer_stat_t *timer_stats_old[],/* old timer stats samples */
 	timer_stat_t *timer_stats_new[])/* new timer stats samples */
@@ -925,7 +925,7 @@ static void timer_stat_diff(
 
 	if (!(opt_flags & OPT_QUIET)) {
 		unsigned long total = 0UL, kt_total = 0UL;
-		int j = 0;
+		long int j = 0;
 
 		printf("%8s %-5s %-15s",
 			opt_flags & OPT_CUMULATIVE ? "Events" : "Event/s", "PID", "Task");
@@ -1088,7 +1088,7 @@ int main(int argc, char **argv)
 	timer_stat_t **timer_stats_old, **timer_stats_new, **tmp;
 	double duration_secs = 1.0;
 	int count = 1;
-	int n_lines = -1;
+	long int n_lines = -1;
 	bool forever = true;
 	struct timeval tv1, tv2, duration, whence;
 
@@ -1116,7 +1116,12 @@ int main(int argc, char **argv)
 			show_usage();
 			eventstat_exit(EXIT_SUCCESS);
 		case 'n':
-			n_lines = atoi(optarg);
+			errno = 0;
+			n_lines = strtol(optarg, NULL, 10);
+			if (errno) {
+				fprintf(stderr, "Invalid value for number of events to display\n");
+				eventstat_exit(EXIT_FAILURE);
+			}
 			if (n_lines < 1) {
 				fprintf(stderr, "-n option must be greater than 0\n");
 				eventstat_exit(EXIT_FAILURE);

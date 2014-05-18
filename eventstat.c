@@ -1087,7 +1087,7 @@ int main(int argc, char **argv)
 {
 	timer_stat_t **timer_stats_old, **timer_stats_new, **tmp;
 	double duration_secs = 1.0;
-	int count = 1;
+	long int count = 1;
 	long int n_lines = -1;
 	bool forever = true;
 	struct timeval tv1, tv2, duration, whence;
@@ -1174,7 +1174,12 @@ int main(int argc, char **argv)
 
 	if (optind < argc) {
 		forever = false;
-		count = atoi(argv[optind++]);
+		errno = 0;
+		count = strtol(argv[optind++], NULL, 10);
+		if (errno) {
+			fprintf(stderr, "Invalid count value\n");
+			eventstat_exit(EXIT_FAILURE);
+		}
 		if (count < 1) {
 			fprintf(stderr, "Count must be > 0\n");
 			eventstat_exit(EXIT_FAILURE);

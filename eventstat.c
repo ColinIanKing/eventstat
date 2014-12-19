@@ -34,7 +34,6 @@
 #include <libgen.h>
 #include <math.h>
 
-#define APP_NAME		"eventstat"
 #define TIMER_STATS		"/proc/timer_stats"
 #define TABLE_SIZE		(32771)		/* Should be a prime */
 
@@ -101,6 +100,7 @@ typedef struct {
 
 #define KERN_TASK_INFO(str)		{ str, sizeof(str) - 1 }
 
+static const char *app_name = "eventstat";
 static list_t timer_info_list;		/* cache list of timer_info */
 static list_t sample_list;		/* list of samples, sorted in sample time order */
 static char *csv_results;		/* results in comma separated values */
@@ -1055,7 +1055,7 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 
 		if ((strncmp(func, "tick_nohz_", 10) == 0) ||
 		    (strncmp(func, "tick_setup_sched_timer", 20) == 0) ||
-		    (strncmp(task, APP_NAME, strlen(APP_NAME)) == 0))
+		    (strncmp(task, app_name, strlen(app_name)) == 0))
 			continue;
 
 		timer_stat_add(timer_stats, count, pid, task, func, timer, kernel_thread);
@@ -1070,8 +1070,8 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
  */
 static void show_usage(void)
 {
-	printf("%s, version %s\n\n", APP_NAME, VERSION);
-	printf("Usage: %s [options] [duration] [count]\n", APP_NAME);
+	printf("%s, version %s\n\n", app_name, VERSION);
+	printf("Usage: %s [options] [duration] [count]\n", app_name);
 	printf("Options are:\n");
 	printf("  -c\t\treport cumulative events rather than events per second.\n");
 	printf("  -C\t\treport event count rather than event per second in CSV output.\n");
@@ -1195,7 +1195,7 @@ int main(int argc, char **argv)
 
 	if (geteuid() != 0) {
 		fprintf(stderr, "%s requires root privileges to write to %s\n",
-			APP_NAME, TIMER_STATS);
+			app_name, TIMER_STATS);
 		eventstat_exit(EXIT_FAILURE);
 	}
 

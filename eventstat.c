@@ -145,7 +145,7 @@ static bool sane_proc_pid_info(void)
 		}
 	}
 
-	fclose(fp);
+	(void)fclose(fp);
 
 	return ret;
 }
@@ -223,7 +223,7 @@ static void set_timer_stat(const char *str, const bool carp)
 		}
 	}
 	fprintf(fp, "%s\n", str);
-	fclose(fp);
+	(void)fclose(fp);
 }
 
 /*
@@ -479,10 +479,10 @@ static char *get_pid_cmdline(const pid_t id)
 		return NULL;
 
 	if ((ret = read(fd, buffer, sizeof(buffer))) <= 0) {
-		close(fd);
+		(void)close(fd);
 		return NULL;
 	}
-	close(fd);
+	(void)close(fd);
 
 	buffer[sizeof(buffer)-1] = '\0';
 
@@ -663,7 +663,7 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 	}
 
 	free(sorted_timer_infos);
-	fclose(fp);
+	(void)fclose(fp);
 }
 
 /*
@@ -1058,7 +1058,7 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 		timer_stat_add(timer_stats, count, pid, task, func, timer, kernel_thread);
 	}
 
-	fclose(fp);
+	(void)fclose(fp);
 }
 
 /*

@@ -79,7 +79,7 @@ typedef struct timer_stat {
 	unsigned long	delta;		/* Change in events since last time */
 	timer_info_t	*info;		/* Timer info */
 	struct timer_stat *next;	/* Next timer stat in hash table */
-	struct timer_stat *sorted_freq_next;	/* Next timer stat in event frequency sorted list */
+	struct timer_stat *sorted_freq_next; /* Next timer stat in event frequency sorted list */
 } timer_stat_t;
 
 /* sample delta item as an element of the sample_delta_list_t */
@@ -636,7 +636,8 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 
 		fprintf(fp, "Average:");
 		for (i = 0; i < n; i++)
-			fprintf(fp, ",%f", dur_zero ? 0.0 : ((double)sorted_timer_infos[i]->total / dur) / (double)count);
+			fprintf(fp, ",%f", dur_zero ? 0.0 :
+				((double)sorted_timer_infos[i]->total / dur) / (double)count);
 		fprintf(fp, "\n");
 
 		/*
@@ -651,7 +652,8 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 				sdl = (sample_delta_list_t*)link->data;
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 				if (sdi) {
-					double diff = dur_zero ? 0.0 : ((double)sdi->delta - average) / dur;
+					double diff = dur_zero ? 0.0 :
+						((double)sdi->delta - average) / dur;
 					diff = diff * diff;
 					sum += diff;
 				}

@@ -1020,7 +1020,8 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 			continue;	/* Deferred event, skip */
 
 		ptr++;
-		sscanf(buf, "%21lu", &count);
+		if (sscanf(buf, "%21lu", &count) != 1)
+			continue;
 		memset(task, 0, sizeof(task));
 		memset(func, 0, sizeof(func));
 		memset(timer, 0, sizeof(timer));

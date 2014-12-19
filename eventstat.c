@@ -1045,17 +1045,17 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 			char tmp[64];
 			task[13] = '\0';
 			snprintf(tmp, sizeof(tmp), "[%s]", task);
-			strcpy(task, tmp);
+			strncpy(task, tmp, 13);
 		}
 
 		if (strcmp(task, "insmod") == 0)
-			strcpy(task, "[kern mod]");
+			strncpy(task, "[kern mod]", 13);
 		if (strcmp(task, "modprobe") == 0)
-			strcpy(task, "[kern mod]");
+			strncpy(task, "[kern mod]", 13);
 
 		if ((strncmp(func, "tick_nohz_", 10) == 0) ||
 		    (strncmp(func, "tick_setup_sched_timer", 20) == 0) ||
-		    (strcmp(task, APP_NAME) == 0))
+		    (strncmp(task, APP_NAME, strlen(APP_NAME)) == 0))
 			continue;
 
 		timer_stat_add(timer_stats, count, pid, task, func, timer, kernel_thread);

@@ -22,6 +22,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdint.h>
+#include <inttypes.h>
 #include <signal.h>
 #include <unistd.h>
 #include <time.h>
@@ -69,12 +71,12 @@ typedef struct timer_info {
 	char		*callback;	/* Kernel timer callback func */
 	char		*ident;		/* Unique identity */
 	bool		kernel_thread;	/* True if task is a kernel thread */
-	unsigned long	total;		/* Total number of events */
+	uint64_t	total;		/* Total number of events */
 } timer_info_t;
 
 typedef struct timer_stat {
-	unsigned long	count;		/* Number of events */
-	unsigned long	delta;		/* Change in events since last time */
+	uint64_t	count;		/* Number of events */
+	int64_t		delta;		/* Change in events since last time */
 	timer_info_t	*info;		/* Timer info */
 	struct timer_stat *next;	/* Next timer stat in hash table */
 	struct timer_stat *sorted_freq_next; /* Next timer stat in event frequency sorted list */
@@ -82,7 +84,7 @@ typedef struct timer_stat {
 
 /* sample delta item as an element of the sample_delta_list_t */
 typedef struct sample_delta_item {
-	unsigned long	delta;		/* difference in timer events between old and new */
+	int64_t		delta;		/* difference in timer events between old and new */
 	timer_info_t	*info;		/* timer this refers to */
 } sample_delta_item_t;
 
@@ -107,7 +109,7 @@ static list_t sample_list;		/* list of samples, sorted in sample time order */
 static char *csv_results;		/* results in comma separated values */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
 static double  opt_threshold;		/* ignore samples with event delta less than this */
-static unsigned int opt_flags;		/* option flags */
+static uint32_t opt_flags;		/* option flags */
 static bool sane_procs;			/* false if we are in a container */
 
 /*
@@ -479,7 +481,10 @@ static int info_compare_total(const void *item1, const void *item2)
 	timer_info_t **info1 = (timer_info_t **)item1;
 	timer_info_t **info2 = (timer_info_t **)item2;
 
-	return (*info2)->total - (*info1)->total;
+	if ((*info2)->total == (*info1)->total)
+		return 0;
+
+	return ((*info2)->total > (*info1)->total) ? 1 : -1;
 }
 
 /*
@@ -602,7 +607,7 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 	size_t i = 0;
 	size_t n = timer_info_list.length;
 	FILE *fp;
-	unsigned long count = 0;
+	uint64_t count = 0;
 	double dur;
 	bool dur_zero;
 
@@ -653,7 +658,7 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 
 	fprintf(fp, "Total:");
 	for (i = 0; i < n; i++)
-		fprintf(fp, ",%lu", sorted_timer_infos[i]->total);
+		fprintf(fp, ",%" PRIu64, sorted_timer_infos[i]->total);
 	fprintf(fp, "\n");
 
 	/*
@@ -686,7 +691,7 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 	if (opt_flags & OPT_RESULT_STATS) {
 		fprintf(fp, "Min:");
 		for (i = 0; i < n; i++) {
-			unsigned long min = ~0;
+			int64_t min = INT64_MAX;
 
 			for (link = sample_list.head; link; link = link->next) {
 				sdl = (sample_delta_list_t*)link->data;
@@ -700,7 +705,7 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 
 		fprintf(fp, "Max:");
 		for (i = 0; i < n; i++) {
-			unsigned long max = 0;
+			int64_t max = INT64_MIN;
 
 			for (link = sample_list.head; link; link = link->next) {
 				sdl = (sample_delta_list_t*)link->data;
@@ -822,12 +827,12 @@ static void timer_info_list_free(void)
  *  hash_pjw()
  *	Hash a string, from Aho, Sethi, Ullman, Compiling Techniques.
  */
-static unsigned long hash_pjw(const char *str)
+static uint32_t hash_pjw(const char *str)
 {
-  	unsigned long h = 0;
+  	uint32_t h = 0;
 
 	while (*str) {
-		unsigned long g;
+		uint32_t g;
 		h = (h << 4) + (*str);
 		if (0 != (g = h & 0xf0000000)) {
 			h = h ^ (g >> 24);
@@ -868,7 +873,7 @@ static void timer_stat_free_contents(
  */
 static void timer_stat_add(
 	timer_stat_t *timer_stats[],	/* timer stat hash table */
-	const unsigned long count,	/* event count */
+	const uint64_t count,		/* event count */
 	const pid_t pid,		/* PID of task */
 	char *task,			/* Name of task */
 	char *func,			/* Kernel function */
@@ -879,7 +884,7 @@ static void timer_stat_add(
 	timer_stat_t *ts;
 	timer_stat_t *ts_new;
 	timer_info_t info;
-	unsigned long h;
+	uint32_t h;
 
 	snprintf(buf, sizeof(buf), "%d:%s:%s:%s", pid, task, func, callback);
 	h = hash_pjw(buf);
@@ -970,7 +975,7 @@ static void timer_stat_sort_freq_add(
  */
 static void timer_stat_diff(
 	struct timeval *duration,	/* time between each sample */
-	const long int n_lines,		/* number of lines to output */
+	const int32_t n_lines,		/* number of lines to output */
 	struct timeval *whence,		/* nth sample */
 	timer_stat_t *timer_stats_old[],/* old timer stats samples */
 	timer_stat_t *timer_stats_new[])/* new timer stats samples */
@@ -1004,8 +1009,8 @@ static void timer_stat_diff(
 	}
 
 	if (!(opt_flags & OPT_QUIET)) {
-		unsigned long total = 0UL, kt_total = 0UL;
-		long int j = 0;
+		uint64_t total = 0UL, kt_total = 0UL;
+		int32_t j = 0;
 
 		printf("%8s %-5s %-15s",
 			opt_flags & OPT_CUMULATIVE ? "Events" : "Event/s", "PID", "Task");
@@ -1019,7 +1024,7 @@ static void timer_stat_diff(
 			if (((n_lines == -1) || (j < n_lines)) && (sorted->delta != 0)) {
 				j++;
 				if (opt_flags & OPT_CUMULATIVE)
-					printf("%8lu ", sorted->count);
+					printf("%8" PRIu64, sorted->count);
 				else
 					printf("%8.2f ", (double)sorted->delta / dur);
 
@@ -1043,7 +1048,8 @@ static void timer_stat_diff(
 
 			sorted = sorted->sorted_freq_next;
 		}
-		printf("%lu Total events, %5.2f events/sec (kernel: %5.2f, userspace: %5.2f)\n",
+		printf("%" PRIu64 " Total events, %5.2f events/sec "
+			"(kernel: %5.2f, userspace: %5.2f)\n",
 			total, (double)total / dur,
 			(double)kt_total / dur,
 			(double)(total - kt_total) / dur);
@@ -1071,7 +1077,7 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 	/* Originally from PowerTop, but majorly re-worked */
 	while (!feof(fp)) {
 		char *ptr = buf;
-		unsigned long count = -1;
+		uint64_t count = 0;
 		pid_t pid = -1;
 		char task[64];
 		char func[128];
@@ -1100,7 +1106,7 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 			continue;	/* Deferred event, skip */
 
 		ptr++;
-		if (sscanf(buf, "%21lu", &count) != 1)
+		if (sscanf(buf, "%21" SCNu64, &count) != 1)
 			continue;
 		memset(task, 0, sizeof(task));
 		memset(func, 0, sizeof(func));
@@ -1168,8 +1174,8 @@ int main(int argc, char **argv)
 {
 	timer_stat_t **timer_stats_old, **timer_stats_new, **tmp;
 	double duration_secs = 1.0;
-	long int count = 1;
-	long int n_lines = -1;
+	int64_t count = 1;
+	int32_t n_lines = -1;
 	bool forever = true;
 	struct timeval tv1, tv2, duration, whence;
 	struct sigaction new_action;
@@ -1200,7 +1206,7 @@ int main(int argc, char **argv)
 			eventstat_exit(EXIT_SUCCESS);
 		case 'n':
 			errno = 0;
-			n_lines = strtol(optarg, NULL, 10);
+			n_lines = (int32_t)strtol(optarg, NULL, 10);
 			if (errno) {
 				fprintf(stderr, "Invalid value for number of events to display\n");
 				eventstat_exit(EXIT_FAILURE);
@@ -1258,7 +1264,7 @@ int main(int argc, char **argv)
 	if (optind < argc) {
 		forever = false;
 		errno = 0;
-		count = strtol(argv[optind++], NULL, 10);
+		count = (int64_t)strtoll(argv[optind++], NULL, 10);
 		if (errno) {
 			fprintf(stderr, "Invalid count value\n");
 			eventstat_exit(EXIT_FAILURE);

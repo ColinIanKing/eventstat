@@ -1,3 +1,21 @@
+eventstat (0.01.33-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Update standards version
+  * Use suseconds_t for nsec conversions
+  * Using stdint int types
+  * Change TIMER_STATS to proc_timer_stats static const string
+  * Add better signal handling; clear timer stat setting and bail out
+  * Add whitespace in hash function
+  * Make APP_NAME a const string and rename to app_name
+  * Use strncmp where possible
+  * Add more error checking on gettimeofday
+  * Fix up some overly long lines
+  * Check for scanf failure
+  * Ignore returns from close, fclose
+
+ -- Colin King <colin.king@canonical.com>  Fri, 19 Dec 2014 12:16:00 +0000
+
 eventstat (0.01.32-1) unstable; urgency=low
 
   * Makefile: bump version

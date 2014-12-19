@@ -1216,7 +1216,11 @@ int main(int argc, char **argv)
 
 	/* Should really catch signals and set back to zero before we die */
 	set_timer_stat("1", true);
-	gettimeofday(&tv1, NULL);
+	if (gettimeofday(&tv1, NULL) < 0) {
+		fprintf(stderr, "gettimeofday() failed: errno=%d (%s)\n",
+			errno, strerror(errno));
+		eventstat_exit(EXIT_FAILURE);
+	}
 	get_events(timer_stats_old);
 
 	whence.tv_sec = 0;
@@ -1226,7 +1230,11 @@ int main(int argc, char **argv)
 		struct timeval tv;
 		int ret;
 
-		gettimeofday(&tv2, NULL);
+		if (gettimeofday(&tv2, NULL) < 0) {
+			fprintf(stderr, "gettimeofday() failed: errno=%d (%s)\n",
+				errno, strerror(errno));
+			break;
+		}
 
 		tv = timeval_add(&duration, &whence);
 		tv = timeval_add(&tv, &tv1);
@@ -1245,7 +1253,8 @@ int main(int argc, char **argv)
 				duration = timeval_sub(&tv, &tv2);
 				stop_eventstat = true;
 			} else {
-				fprintf(stderr, "Select failed: %s\n", strerror(errno));
+				fprintf(stderr, "select() failed: errno=%d (%s)\n",
+					errno, strerror(errno));
 				break;
 			}
 		}

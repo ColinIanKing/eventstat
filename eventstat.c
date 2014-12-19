@@ -110,6 +110,71 @@ static unsigned int opt_flags;		/* option flags */
 static bool sane_procs;			/* false if we are in a container */
 
 /*
+ *  Attempt to catch a range of signals so
+ *  we can clean
+ */
+static const int signals[] = {
+	/* POSIX.1-1990 */
+#ifdef SIGHUP
+	SIGHUP,
+#endif
+#ifdef SIGINT
+	SIGINT,
+#endif
+#ifdef SIGQUIT
+	SIGQUIT,
+#endif
+#ifdef SIGILL
+	SIGILL,
+#endif
+#ifdef SIGABRT
+	SIGABRT,
+#endif
+#ifdef SIGFPE
+	SIGFPE,
+#endif
+#ifdef SIGSEGV
+	SIGSEGV,
+#endif
+#ifdef SIGTERM
+	SIGTERM,
+#endif
+#ifdef SIGUSR1
+	SIGUSR1,
+#endif
+#ifdef SIGUSR2
+	SIGUSR2,
+	/* POSIX.1-2001 */
+#endif
+#ifdef SIGBUS
+	SIGBUS,
+#endif
+#ifdef SIGXCPU
+	SIGXCPU,
+#endif
+#ifdef SIGXFSZ
+	SIGXFSZ,
+#endif
+	/* Linux various */
+#ifdef SIGIOT
+	SIGIOT,
+#endif
+#ifdef SIGSTKFLT
+	SIGSTKFLT,
+#endif
+#ifdef SIGPWR
+	SIGPWR,
+#endif
+#ifdef SIGINFO
+	SIGINFO,
+#endif
+#ifdef SIGVTALRM
+	SIGVTALRM,
+#endif
+	-1,
+};
+
+/*
  *  sane_proc_pid_info()
  *	detect if proc info mapping from /proc/timer_stats
  *	maps to proc pids OK. If we are in a container or
@@ -212,18 +277,29 @@ static inline double timeval_double(const struct timeval *tv)
  */
 static void set_timer_stat(const char *str, const bool carp)
 {
-	FILE *fp;
+	int fd;
+	ssize_t len = (ssize_t)strlen(str);
 
-	if ((fp = fopen(TIMER_STATS, "w")) == NULL) {
+	if ((fd = open(TIMER_STATS, O_WRONLY, S_IRUSR | S_IWUSR)) < 0) {
 		if (carp) {
-			fprintf(stderr, "Cannot write to %s\n",TIMER_STATS);
+			fprintf(stderr, "Cannot open %s, errno=%d (%s)\n",
+				TIMER_STATS, errno, strerror(errno));
 			exit(EXIT_FAILURE);
 		} else {
 			return;
 		}
 	}
-	fprintf(fp, "%s\n", str);
-	(void)fclose(fp);
+	if (write(fd, str, len) != len) {
+		close(fd);
+		if (carp) {
+			fprintf(stderr, "Cannot write to %s, errno=%d (%s)\n",
+				TIMER_STATS, errno, strerror(errno));
+			exit(EXIT_FAILURE);
+		} else {
+			return;
+		}
+	}
+	(void)close(fd);
 }
 
 /*
@@ -237,7 +313,7 @@ static void eventstat_exit(const int status) __attribute__ ((noreturn));
  */
 static void eventstat_exit(const int status)
 {
-	set_timer_stat("0", false);
+	set_timer_stat("0\n", false);
 
 	exit(status);
 }
@@ -298,14 +374,15 @@ static void list_free(list_t *list, const list_link_free_t freefunc)
 }
 
 /*
- *  handle_sigint()
- *      catch SIGINT and flag a stop
+ *  handle_sig()
+ *      catch signal, flag a stop and restore timer stat
  */
-static void handle_sigint(int dummy)
+static void handle_sig(int dummy)
 {
 	(void)dummy;	/* Stop unused parameter warning with -Wextra */
 
 	stop_eventstat = true;
+	set_timer_stat("0\n", false);
 }
 
 /*
@@ -1094,6 +1171,8 @@ int main(int argc, char **argv)
 	long int n_lines = -1;
 	bool forever = true;
 	struct timeval tv1, tv2, duration, whence;
+	struct sigaction new_action;
+	int i;
 
 	list_init(&timer_info_list);
 	list_init(&sample_list);
@@ -1203,7 +1282,18 @@ int main(int argc, char **argv)
 	if (!sane_procs)
 		opt_flags &= ~(OPT_CMD_SHORT | OPT_CMD_LONG);
 
-	signal(SIGINT, &handle_sigint);
+	memset(&new_action, 0, sizeof(new_action));
+	for (i = 0; signals[i] != -1; i++) {
+		new_action.sa_handler = handle_sig;
+		sigemptyset(&new_action.sa_mask);
+		new_action.sa_flags = 0;
+
+		if (sigaction(signals[i], &new_action, NULL) < 0) {
+			fprintf(stderr, "sigaction failed: errno=%d (%s)\n",
+				errno, strerror(errno));
+			eventstat_exit(EXIT_FAILURE);
+		}
+	}
 
 	if ((timer_stats_old = calloc(TABLE_SIZE, sizeof(timer_stat_t*))) == NULL) {
 		fprintf(stderr, "Cannot allocate old timer stats table\n");
@@ -1215,7 +1305,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Should really catch signals and set back to zero before we die */
-	set_timer_stat("1", true);
+	set_timer_stat("1\n", true);
 	if (gettimeofday(&tv1, NULL) < 0) {
 		fprintf(stderr, "gettimeofday() failed: errno=%d (%s)\n",
 			errno, strerror(errno));
@@ -1251,7 +1341,7 @@ int main(int argc, char **argv)
 		if (ret < 0) {
 			if (errno == EINTR) {
 				duration = timeval_sub(&tv, &tv2);
-				stop_eventstat = true;
+				goto abort;
 			} else {
 				fprintf(stderr, "select() failed: errno=%d (%s)\n",
 					errno, strerror(errno));
@@ -1270,7 +1360,7 @@ int main(int argc, char **argv)
 
 		whence = timeval_add(&duration, &whence);
 	}
-
+abort:
 	samples_dump(csv_results, &duration);
 
 	timer_stat_free_contents(timer_stats_old);

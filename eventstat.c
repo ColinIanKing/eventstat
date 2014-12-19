@@ -34,7 +34,6 @@
 #include <libgen.h>
 #include <math.h>
 
-#define TIMER_STATS		"/proc/timer_stats"
 #define TABLE_SIZE		(32771)		/* Should be a prime */
 
 #define OPT_QUIET		(0x00000001)
@@ -101,6 +100,8 @@ typedef struct {
 #define KERN_TASK_INFO(str)		{ str, sizeof(str) - 1 }
 
 static const char *app_name = "eventstat";
+static const char *proc_timer_stats = "/proc/timer_stats";
+
 static list_t timer_info_list;		/* cache list of timer_info */
 static list_t sample_list;		/* list of samples, sorted in sample time order */
 static char *csv_results;		/* results in comma separated values */
@@ -280,10 +281,10 @@ static void set_timer_stat(const char *str, const bool carp)
 	int fd;
 	ssize_t len = (ssize_t)strlen(str);
 
-	if ((fd = open(TIMER_STATS, O_WRONLY, S_IRUSR | S_IWUSR)) < 0) {
+	if ((fd = open(proc_timer_stats, O_WRONLY, S_IRUSR | S_IWUSR)) < 0) {
 		if (carp) {
 			fprintf(stderr, "Cannot open %s, errno=%d (%s)\n",
-				TIMER_STATS, errno, strerror(errno));
+				proc_timer_stats, errno, strerror(errno));
 			exit(EXIT_FAILURE);
 		} else {
 			return;
@@ -293,7 +294,7 @@ static void set_timer_stat(const char *str, const bool carp)
 		close(fd);
 		if (carp) {
 			fprintf(stderr, "Cannot write to %s, errno=%d (%s)\n",
-				TIMER_STATS, errno, strerror(errno));
+				proc_timer_stats, errno, strerror(errno));
 			exit(EXIT_FAILURE);
 		} else {
 			return;
@@ -1062,8 +1063,8 @@ static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
 	FILE *fp;
 	char buf[4096];
 
-	if ((fp = fopen(TIMER_STATS, "r")) == NULL) {
-		fprintf(stderr, "Cannot open %s\n", TIMER_STATS);
+	if ((fp = fopen(proc_timer_stats, "r")) == NULL) {
+		fprintf(stderr, "Cannot open %s\n", proc_timer_stats);
 		return;
 	}
 
@@ -1274,7 +1275,7 @@ int main(int argc, char **argv)
 
 	if (geteuid() != 0) {
 		fprintf(stderr, "%s requires root privileges to write to %s\n",
-			app_name, TIMER_STATS);
+			app_name, proc_timer_stats);
 		eventstat_exit(EXIT_FAILURE);
 	}
 

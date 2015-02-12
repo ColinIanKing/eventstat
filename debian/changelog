@@ -1,3 +1,14 @@
+eventstat (0.01.34-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Update copyright to manual
+  * Update debian/copyright
+  * Update copyright in source
+  * Clarify calculation precedence for '&' and '?'
+  * Handle time deltas more exactly, this is required of eventstat is suspended.
+
+ -- Colin King <colin.king@canonical.com>  Thu, 12 Feb 2015 19:36:00 +0000
+
 eventstat (0.01.33-1) unstable; urgency=medium
 
   * Makefile: bump version

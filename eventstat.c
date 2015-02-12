@@ -1026,7 +1026,7 @@ static void timer_stat_diff(
 		int32_t j = 0;
 
 		printf("%8s %-5s %-15s",
-			opt_flags & OPT_CUMULATIVE ? "Events" : "Event/s", "PID", "Task");
+			(opt_flags & OPT_CUMULATIVE) ? "Events" : "Event/s", "PID", "Task");
 		if (!(opt_flags & OPT_BRIEF))
 			printf(" %-25s %-s\n",
 				"Init Function", "Callback");
@@ -1047,7 +1047,7 @@ static void timer_stat_diff(
 
 					printf("%5d %s\n",
 						sorted->info->pid,
-						opt_flags & OPT_CMD ?
+						(opt_flags & OPT_CMD) ?
 							cmd : sorted->info->task);
 				} else {
 					printf("%5d %-15s %-25s %-s\n",

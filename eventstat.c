@@ -444,6 +444,7 @@ static void sample_add(
 		eventstat_exit(EXIT_FAILURE);
 	}
 	sdi->delta = timer_stat->delta;
+	sdi->time_delta = timer_stat->time_delta;
 	sdi->info  = timer_stat->info;
 
 	list_append(&sdl->list, sdi);
@@ -670,6 +671,7 @@ static void samples_dump(const char *filename)
 		/* Scan in timer info order to be consistent for all sdl rows */
 		for (i = 0; i < n; i++) {
 			sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
+
 			/*
 			 *  duration - if -C option is used then don't scale by the
 			 *  per sample duration time, instead give the raw sample count
@@ -885,6 +887,7 @@ static void timer_stat_free_contents(
  */
 static void timer_stat_add(
 	timer_stat_t *timer_stats[],	/* timer stat hash table */
+	const double time_now,		/* time sample was taken */
 	const uint64_t count,		/* event count */
 	const pid_t pid,		/* PID of task */
 	char *task,			/* Name of task */
@@ -924,9 +927,10 @@ static void timer_stat_add(
 	info.total = count;
 	info.time_total = 0.0;
 
-	ts_new->count  = count;
+	ts_new->count = count;
 	ts_new->info = timer_info_find(&info);
-	ts_new->next  = timer_stats[h];
+	ts_new->next = timer_stats[h];
+	ts_new->time = time_now;
 	ts_new->sorted_freq_next = NULL;
 
 	timer_stats[h] = ts_new;
@@ -1078,7 +1082,9 @@ static void timer_stat_diff(
  *	scan /proc/timer_stats and populate a timer stat hash table with
  *	unique events
  */
-static void get_events(timer_stat_t *timer_stats[])
+static void get_events(
+	timer_stat_t *timer_stats[],
+	const double time_now)
 {
 	FILE *fp;
 	char buf[4096];
@@ -1156,7 +1162,7 @@ static void get_events(timer_stat_t *timer_stats[])
 		    (strncmp(task, app_name, strlen(app_name)) == 0))
 			continue;
 
-		timer_stat_add(timer_stats, count, pid, task, func, timer, kernel_thread);
+		timer_stat_add(timer_stats, time_now, count, pid, task, func, timer, kernel_thread);
 	}
 
 	(void)fclose(fp);
@@ -1326,7 +1332,7 @@ int main(int argc, char **argv)
 	set_timer_stat("1\n", true);
 	time_now = time_start = gettime_to_double();
 
-	get_events(timer_stats_old);
+	get_events(timer_stats_old, time_now);
 
 	while (!stop_eventstat && (forever || count--)) {
 		struct timeval tv;
@@ -1361,7 +1367,7 @@ int main(int argc, char **argv)
 		duration = floor((duration * 100.0) + 0.5) / 100.0;
 		time_now = gettime_to_double();
 
-		get_events(timer_stats_new);
+		get_events(timer_stats_new, time_now);
 		timer_stat_diff(duration, n_lines, time_now,
 			timer_stats_old, timer_stats_new);
 		timer_stat_free_contents(timer_stats_old);

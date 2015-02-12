@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <libgen.h>
 #include <math.h>
+#include <float.h>
 
 #define TABLE_SIZE		(32771)		/* Should be a prime */
 
@@ -72,11 +73,14 @@ typedef struct timer_info {
 	char		*ident;		/* Unique identity */
 	bool		kernel_thread;	/* True if task is a kernel thread */
 	uint64_t	total;		/* Total number of events */
+	double		time_total;	/* Total time */
 } timer_info_t;
 
 typedef struct timer_stat {
 	uint64_t	count;		/* Number of events */
 	int64_t		delta;		/* Change in events since last time */
+	double		time;		/* Time of sample */
+	double		time_delta;	/* Change in time since last time */
 	timer_info_t	*info;		/* Timer info */
 	struct timer_stat *next;	/* Next timer stat in hash table */
 	struct timer_stat *sorted_freq_next; /* Next timer stat in event frequency sorted list */
@@ -85,12 +89,13 @@ typedef struct timer_stat {
 /* sample delta item as an element of the sample_delta_list_t */
 typedef struct sample_delta_item {
 	int64_t		delta;		/* difference in timer events between old and new */
+	double		time_delta;	/* difference in time between old and new */
 	timer_info_t	*info;		/* timer this refers to */
 } sample_delta_item_t;
 
 /* list of sample_delta_items */
 typedef struct sample_delta_list {
-	struct timeval 	whence;		/* when the sample was taken */
+	double		whence;		/* when the sample was taken */
 	list_t		list;
 } sample_delta_list_t;
 
@@ -178,6 +183,95 @@ static const int signals[] = {
 };
 
 /*
+ *  set_timer_stat()
+ *	enable/disable timer stat
+ */
+static void set_timer_stat(const char *str, const bool carp)
+{
+	int fd;
+	ssize_t len = (ssize_t)strlen(str);
+
+	if ((fd = open(proc_timer_stats, O_WRONLY, S_IRUSR | S_IWUSR)) < 0) {
+		if (carp) {
+			fprintf(stderr, "Cannot open %s, errno=%d (%s)\n",
+				proc_timer_stats, errno, strerror(errno));
+			exit(EXIT_FAILURE);
+		} else {
+			return;
+		}
+	}
+	if (write(fd, str, len) != len) {
+		close(fd);
+		if (carp) {
+			fprintf(stderr, "Cannot write to %s, errno=%d (%s)\n",
+				proc_timer_stats, errno, strerror(errno));
+			exit(EXIT_FAILURE);
+		} else {
+			return;
+		}
+	}
+	(void)close(fd);
+}
+
+
+/*
+ *  Stop gcc complaining about no return func
+ */
+static void eventstat_exit(const int status) __attribute__ ((noreturn));
+
+/*
+ *  eventstat_exit()
+ *	exit and set timer stat to 0
+ */
+static void eventstat_exit(const int status)
+{
+	set_timer_stat("0\n", false);
+
+	exit(status);
+}
+
+
+/*
+ *  timeval_to_double
+ *	timeval to a double (in seconds)
+ */
+static inline double timeval_to_double(const struct timeval *const tv)
+{
+	return (double)tv->tv_sec + ((double)tv->tv_usec / 1000000.0);
+}
+
+
+/*
+ *  double_to_timeval
+ *	seconds in double to timeval
+ */
+static inline struct timeval double_to_timeval(const double val)
+{
+	struct timeval tv;
+
+	tv.tv_sec = val;
+	tv.tv_usec = (val - (time_t)val) * 1000000.0;
+
+	return tv;
+}
+
+/*
+ *  gettime_to_double()
+ *      get time as a double
+ */
+static double gettime_to_double(void)
+{
+	struct timeval tv;
+
+	if (gettimeofday(&tv, NULL) < 0) {
+		fprintf(stderr, "gettimeofday failed: errno=%d (%s)\n",
+			errno, strerror(errno));
+		eventstat_exit(EXIT_FAILURE);
+	}
+	return timeval_to_double(&tv);
+}
+
+/*
  *  sane_proc_pid_info()
  *	detect if proc info mapping from /proc/timer_stats
  *	maps to proc pids OK. If we are in a container or
@@ -216,109 +310,6 @@ static bool sane_proc_pid_info(void)
 	(void)fclose(fp);
 
 	return ret;
-}
-
-/*
- *  timeval_sub()
- *	timeval a - b
- */
-static struct timeval timeval_sub(const struct timeval *a, const struct timeval *b)
-{
-	struct timeval ret, _b;
-
-	_b.tv_sec = b->tv_sec;
-	_b.tv_usec = b->tv_usec;
-
-	if (a->tv_usec < _b.tv_usec) {
-		suseconds_t nsec = ((_b.tv_usec - a->tv_usec) / 1000000) + 1;
-		_b.tv_sec += nsec;
-		_b.tv_usec -= (1000000 * nsec);
-	}
-	if (a->tv_usec - _b.tv_usec > 1000000) {
-		suseconds_t nsec = (a->tv_usec - _b.tv_usec) / 1000000;
-		_b.tv_sec -= nsec;
-		_b.tv_usec += (1000000 * nsec);
-	}
-
-	ret.tv_sec = a->tv_sec - _b.tv_sec;
-	ret.tv_usec = a->tv_usec - _b.tv_usec;
-
-	return ret;
-}
-
-/*
- *  timeval_add()
- *	timeval a + b
- */
-static struct timeval timeval_add(const struct timeval *a, const struct timeval *b)
-{
-	struct timeval ret;
-
-	ret.tv_sec = a->tv_sec + b->tv_sec;
-	ret.tv_usec = a->tv_usec + b->tv_usec;
-	if (ret.tv_usec > 1000000) {
-		suseconds_t nsec = (ret.tv_usec / 1000000);
-		ret.tv_sec += nsec;
-		ret.tv_usec -= (1000000 * nsec);
-	}
-
-	return ret;
-}
-
-/*
- *  timeval_double
- *	timeval to a double
- */
-static inline double timeval_double(const struct timeval *tv)
-{
-	return (double)tv->tv_sec + ((double)tv->tv_usec / 1000000.0);
-}
-
-/*
- *  set_timer_stat()
- *	enable/disable timer stat
- */
-static void set_timer_stat(const char *str, const bool carp)
-{
-	int fd;
-	ssize_t len = (ssize_t)strlen(str);
-
-	if ((fd = open(proc_timer_stats, O_WRONLY, S_IRUSR | S_IWUSR)) < 0) {
-		if (carp) {
-			fprintf(stderr, "Cannot open %s, errno=%d (%s)\n",
-				proc_timer_stats, errno, strerror(errno));
-			exit(EXIT_FAILURE);
-		} else {
-			return;
-		}
-	}
-	if (write(fd, str, len) != len) {
-		close(fd);
-		if (carp) {
-			fprintf(stderr, "Cannot write to %s, errno=%d (%s)\n",
-				proc_timer_stats, errno, strerror(errno));
-			exit(EXIT_FAILURE);
-		} else {
-			return;
-		}
-	}
-	(void)close(fd);
-}
-
-/*
- *  Stop gcc complaining about no return func
- */
-static void eventstat_exit(const int status) __attribute__ ((noreturn));
-
-/*
- *  eventstat_exit()
- *	exit and set timer stat to 0
- */
-static void eventstat_exit(const int status)
-{
-	set_timer_stat("0\n", false);
-
-	exit(status);
 }
 
 /*
@@ -413,7 +404,9 @@ static void samples_free(void)
  *  sample_add()
  *	add a timer_stat's delta and info field to a list at time position whence
  */
-static void sample_add(timer_stat_t *timer_stat, struct timeval *whence)
+static void sample_add(
+	timer_stat_t *timer_stat,
+	const double whence)
 {
 	link_t	*link;
 	bool	found = false;
@@ -425,8 +418,7 @@ static void sample_add(timer_stat_t *timer_stat, struct timeval *whence)
 
 	for (link = sample_list.head; link; link = link->next) {
 		sdl = (sample_delta_list_t*)link->data;
-		if ((sdl->whence.tv_sec == whence->tv_sec) &&
-		    (sdl->whence.tv_usec == whence->tv_usec)) {
+		if (sdl->whence == whence) {
 			found = true;
 			break;
 		}
@@ -441,7 +433,7 @@ static void sample_add(timer_stat_t *timer_stat, struct timeval *whence)
 			fprintf(stderr, "Cannot allocate sample delta list\n");
 			eventstat_exit(EXIT_FAILURE);
 		}
-		sdl->whence = *whence;
+		sdl->whence = whence;
 		list_append(&sample_list, sdl);
 	}
 
@@ -595,11 +587,16 @@ static char *get_pid_cmdline(const pid_t id)
 	return strdup(buffer);
 }
 
+static inline double duration_round(const double duration)
+{
+	return floor((duration * 100.0) + 0.5) / 100.0;
+}
+
 /*
  *  samples_dump()
  *	dump out collected sample information
  */
-static void samples_dump(const char *filename, const struct timeval *duration)
+static void samples_dump(const char *filename)
 {
 	sample_delta_list_t	*sdl;
 	timer_info_t **sorted_timer_infos;
@@ -608,8 +605,8 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 	size_t n = timer_info_list.length;
 	FILE *fp;
 	uint64_t count = 0;
-	double dur;
-	bool dur_zero;
+	double first_time = -1.0;
+	double duration;
 
 	if (filename == NULL)
 		return;
@@ -661,25 +658,27 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 		fprintf(fp, ",%" PRIu64, sorted_timer_infos[i]->total);
 	fprintf(fp, "\n");
 
-	/*
-	 *  duration - if -C option is used then don't scale by the
-	 *  per sample duration time, instead give the raw sample count
-	 *  by scaling by 1.0 (i.e. no scaling).
-	 */
-	dur = (opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : timeval_double(duration);
-	dur_zero = (duration->tv_sec == 0) && (duration->tv_usec == 0);
-
 	for (link = sample_list.head; link; link = link->next) {
 		count++;
 		sdl = (sample_delta_list_t*)link->data;
-		fprintf(fp, "%f", timeval_double(&sdl->whence));
+
+		if (first_time < 0)
+			first_time = sdl->whence;
+		fprintf(fp, "%f", duration_round(sdl->whence - first_time));
 
 		/* Scan in timer info order to be consistent for all sdl rows */
 		for (i = 0; i < n; i++) {
 			sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
-			if (sdi)
-				fprintf(fp, ",%f", dur_zero ? 0.0 : (double)sdi->delta / dur);
-			else
+			/*
+			 *  duration - if -C option is used then don't scale by the
+			 *  per sample duration time, instead give the raw sample count
+			 *  by scaling by 1.0 (i.e. no scaling).
+			 */
+			if (sdi) {
+				duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+				fprintf(fp, ",%f", duration == 0.0 ? 0.0 :
+					(double)sdi->delta / duration);
+			} else
 				fprintf(fp, ",%f", 0.0);
 		}
 		fprintf(fp, "\n");
@@ -691,36 +690,46 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 	if (opt_flags & OPT_RESULT_STATS) {
 		fprintf(fp, "Min:");
 		for (i = 0; i < n; i++) {
-			int64_t min = INT64_MAX;
+			double min = DBL_MAX;
 
 			for (link = sample_list.head; link; link = link->next) {
 				sdl = (sample_delta_list_t*)link->data;
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
-				if (sdi && min > sdi->delta)
-					min = sdi->delta;
+
+				if (sdi) {
+					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+					double val = (duration == 0.0) ? 0.0: sdi->delta / duration;
+					if (min > val)
+						min = val;
+				}
 			}
-			fprintf(fp, ",%f", dur_zero ? 0.0 : (double)min / dur);
+			fprintf(fp, ",%f", min);
 		}
 		fprintf(fp, "\n");
 
 		fprintf(fp, "Max:");
 		for (i = 0; i < n; i++) {
-			int64_t max = INT64_MIN;
+			double max = DBL_MIN;
 
 			for (link = sample_list.head; link; link = link->next) {
 				sdl = (sample_delta_list_t*)link->data;
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
-				if (sdi && max < sdi->delta)
-					max = sdi->delta;
+
+				if (sdi) {
+					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+					double val = (duration == 0.0) ? 0.0: sdi->delta / duration;
+					if (max < val)
+						max = val;
+				}
 			}
-			fprintf(fp, ",%f", dur_zero ? 0.0 : (double)max / dur);
+			fprintf(fp, ",%f", max);
 		}
 		fprintf(fp, "\n");
 
 		fprintf(fp, "Average:");
 		for (i = 0; i < n; i++)
-			fprintf(fp, ",%f", dur_zero ? 0.0 :
-				((double)sorted_timer_infos[i]->total / dur) / (double)count);
+			fprintf(fp, ",%f", count == 0 ? 0.0 :
+				(double)sorted_timer_infos[i]->total / count);
 		fprintf(fp, "\n");
 
 		/*
@@ -735,8 +744,9 @@ static void samples_dump(const char *filename, const struct timeval *duration)
 				sdl = (sample_delta_list_t*)link->data;
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 				if (sdi) {
-					double diff = dur_zero ? 0.0 :
-						((double)sdi->delta - average) / dur;
+					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+					double diff = duration == 0.0 ? 0.0 :
+						((double)sdi->delta - average) / duration;
 					diff = diff * diff;
 					sum += diff;
 				}
@@ -782,6 +792,7 @@ static timer_info_t *timer_info_find(const timer_info_t *new_info)
 	info->ident = strdup(new_info->ident);
 	info->kernel_thread = new_info->kernel_thread;
 	info->total = new_info->total;
+	info->time_total = new_info->time_total;
 
 	if (info->task == NULL ||
 	    info->func == NULL ||
@@ -910,6 +921,7 @@ static void timer_stat_add(
 	info.ident = buf;
 	info.kernel_thread = kernel_thread;
 	info.total = count;
+	info.time_total = 0.0;
 
 	ts_new->count  = count;
 	ts_new->info = timer_info_find(&info);
@@ -974,15 +986,13 @@ static void timer_stat_sort_freq_add(
  *	silently die
  */
 static void timer_stat_diff(
-	struct timeval *duration,	/* time between each sample */
+	const double duration,		/* time between each sample */
 	const int32_t n_lines,		/* number of lines to output */
-	struct timeval *whence,		/* nth sample */
+	const double whence,		/* nth sample */
 	timer_stat_t *timer_stats_old[],/* old timer stats samples */
 	timer_stat_t *timer_stats_new[])/* new timer stats samples */
 {
 	int i;
-	double dur = timeval_double(duration);
-
 	timer_stat_t *sorted = NULL;
 
 	for (i = 0; i < TABLE_SIZE; i++) {
@@ -993,13 +1003,16 @@ static void timer_stat_diff(
 				timer_stat_find(timer_stats_old, ts);
 			if (found) {
 				ts->delta = ts->count - found->count;
+				ts->time_delta = ts->time - found->time;
 				if (ts->delta >= opt_threshold) {
 					timer_stat_sort_freq_add(&sorted, ts);
 					sample_add(ts, whence);
 					found->info->total += ts->delta;
+					found->info->time_total += ts->time_delta;
 				}
 			} else {
 				ts->delta = ts->count;
+				ts->time_delta = duration;
 				if (ts->delta >= opt_threshold) {
 					timer_stat_sort_freq_add(&sorted, ts);
 					sample_add(ts, whence);
@@ -1026,7 +1039,7 @@ static void timer_stat_diff(
 				if (opt_flags & OPT_CUMULATIVE)
 					printf("%8" PRIu64, sorted->count);
 				else
-					printf("%8.2f ", (double)sorted->delta / dur);
+					printf("%8.2f ", (double)sorted->delta / duration);
 
 				if (opt_flags & OPT_BRIEF) {
 					char *cmd = sorted->info->cmdline ?
@@ -1050,9 +1063,9 @@ static void timer_stat_diff(
 		}
 		printf("%" PRIu64 " Total events, %5.2f events/sec "
 			"(kernel: %5.2f, userspace: %5.2f)\n",
-			total, (double)total / dur,
-			(double)kt_total / dur,
-			(double)(total - kt_total) / dur);
+			total, (double)total / duration,
+			(double)kt_total / duration,
+			(double)(total - kt_total) / duration);
 		if (!sane_procs)
 			printf("Note: this was run inside a container, kernel tasks were guessed.\n");
 		printf("\n");
@@ -1064,7 +1077,7 @@ static void timer_stat_diff(
  *	scan /proc/timer_stats and populate a timer stat hash table with
  *	unique events
  */
-static void get_events(timer_stat_t *timer_stats[])	/* hash table to populate */
+static void get_events(timer_stat_t *timer_stats[])
 {
 	FILE *fp;
 	char buf[4096];
@@ -1173,11 +1186,10 @@ static void show_usage(void)
 int main(int argc, char **argv)
 {
 	timer_stat_t **timer_stats_old, **timer_stats_new, **tmp;
-	double duration_secs = 1.0;
-	int64_t count = 1;
+	double duration_secs = 1.0, time_start, time_now;
+	int64_t count = 1, t = 1;
 	int32_t n_lines = -1;
 	bool forever = true;
-	struct timeval tv1, tv2, duration, whence;
 	struct sigaction new_action;
 	int i;
 
@@ -1275,8 +1287,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	duration.tv_sec = (time_t)duration_secs;
-	duration.tv_usec = (suseconds_t)(duration_secs * 1000000.0) - (duration.tv_sec * 1000000);
 	opt_threshold *= duration_secs;
 
 	if (geteuid() != 0) {
@@ -1313,41 +1323,31 @@ int main(int argc, char **argv)
 
 	/* Should really catch signals and set back to zero before we die */
 	set_timer_stat("1\n", true);
-	if (gettimeofday(&tv1, NULL) < 0) {
-		fprintf(stderr, "gettimeofday() failed: errno=%d (%s)\n",
-			errno, strerror(errno));
-		eventstat_exit(EXIT_FAILURE);
-	}
-	get_events(timer_stats_old);
+	time_now = time_start = gettime_to_double();
 
-	whence.tv_sec = 0;
-	whence.tv_usec = 0;
+	get_events(timer_stats_old);
 
 	while (!stop_eventstat && (forever || count--)) {
 		struct timeval tv;
+		double secs, duration = duration_secs;
 		int ret;
 
-		if (gettimeofday(&tv2, NULL) < 0) {
-			fprintf(stderr, "gettimeofday() failed: errno=%d (%s)\n",
-				errno, strerror(errno));
-			break;
-		}
-
-		tv = timeval_add(&duration, &whence);
-		tv = timeval_add(&tv, &tv1);
-		tv2 = tv = timeval_sub(&tv, &tv2);
-
+		/* Timeout to wait for in the future for this sample */
+		secs = time_start + ((double)t * duration_secs) - time_now;
 		/* Play catch-up, probably been asleep */
-		if (tv.tv_sec < 0) {
-			tv.tv_sec = 0;
-			tv.tv_usec = 0;
-			tv2 = tv;
+		if (secs < 0.0) {
+			t = ceil((time_now - time_start) / duration_secs);
+			secs = time_start + ((double)t * duration_secs) - time_now;
+			/* Really, it's impossible, but just in case.. */
+			if (secs < 0.0)
+				secs = 0.0;
+		} else {
+			t++;
 		}
-
-		ret = select(0, NULL, NULL, NULL, &tv2);
+		tv = double_to_timeval(secs);
+		ret = select(0, NULL, NULL, NULL, &tv);
 		if (ret < 0) {
 			if (errno == EINTR) {
-				duration = timeval_sub(&tv, &tv2);
 				goto abort;
 			} else {
 				fprintf(stderr, "select() failed: errno=%d (%s)\n",
@@ -1356,19 +1356,21 @@ int main(int argc, char **argv)
 			}
 		}
 
+		duration = gettime_to_double() - time_now;
+		duration = floor((duration * 100.0) + 0.5) / 100.0;
+		time_now = gettime_to_double();
+
 		get_events(timer_stats_new);
-		timer_stat_diff(&duration, n_lines, &whence,
+		timer_stat_diff(duration, n_lines, time_now,
 			timer_stats_old, timer_stats_new);
 		timer_stat_free_contents(timer_stats_old);
 
 		tmp             = timer_stats_old;
 		timer_stats_old = timer_stats_new;
 		timer_stats_new = tmp;
-
-		whence = timeval_add(&duration, &whence);
 	}
 abort:
-	samples_dump(csv_results, &duration);
+	samples_dump(csv_results);
 
 	timer_stat_free_contents(timer_stats_old);
 	timer_stat_free_contents(timer_stats_new);

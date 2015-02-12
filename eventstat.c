@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2014 Canonical
+ * Copyright (C) 2011-2015 Canonical
  * Hugely modified parts from powertop-1.13, Copyright 2007, Intel Corporation
  *
  * This program is free software; you can redistribute it and/or
@@ -16,6 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
+ * eventstat by Colin Ian King <colin.king@canonical.com>
  */
 
 #include <stdio.h>

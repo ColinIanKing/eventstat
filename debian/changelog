@@ -1,3 +1,10 @@
+eventstat (0.01.35-1) unstable; urgency=medium
+
+  * Makefile: bump version again
+  * Fix the per sample time delta calculations
+
+ -- Colin King <colin.king@canonical.com>  Thu, 12 Feb 2015 20:24:00 +0000
+
 eventstat (0.01.34-1) unstable; urgency=medium
 
   * Makefile: bump version

@@ -473,62 +473,66 @@ static int info_compare_total(const void *item1, const void *item2)
 	return ((*info2)->total > (*info1)->total) ? 1 : -1;
 }
 
+static bool pid_a_kernel_thread_guess(const char *task)
+{
+	/*
+	 * This is not exactly accurate, but if we can't look up
+	 * a process then try and infer something from the comm field.
+	 * Until we have better kernel support to map /proc/timer_stats
+	 * pids to containerised pids this is the best we can do.
+	 */
+	static kernel_task_info kernel_tasks[] = {
+		KERN_TASK_INFO("swapper/"),
+		KERN_TASK_INFO("kworker/"),
+		KERN_TASK_INFO("ksoftirqd/"),
+		KERN_TASK_INFO("watchdog/"),
+		KERN_TASK_INFO("migration/"),
+		KERN_TASK_INFO("irq/"),
+		KERN_TASK_INFO("mmcqd/"),
+		KERN_TASK_INFO("jbd2/"),
+		KERN_TASK_INFO("kthreadd"),
+		KERN_TASK_INFO("kthrotld"),
+		KERN_TASK_INFO("kswapd"),
+		KERN_TASK_INFO("ecryptfs-kthrea"),
+		KERN_TASK_INFO("kauditd"),
+		KERN_TASK_INFO("kblockd"),
+		KERN_TASK_INFO("kcryptd"),
+		KERN_TASK_INFO("kdevtmpfs"),
+		KERN_TASK_INFO("khelper"),
+		KERN_TASK_INFO("khubd"),
+		KERN_TASK_INFO("khugepaged"),
+		KERN_TASK_INFO("khungtaskd"),
+		KERN_TASK_INFO("flush-"),
+		KERN_TASK_INFO("bdi-default-"),
+		{ NULL, 0 }
+	};
+	size_t i;
+
+	for (i = 0; kernel_tasks[i].task != NULL; i++) {
+		if (strncmp(task, kernel_tasks[i].task, kernel_tasks[i].len) == 0)
+			return true;
+	}
+	return false;
+}
+
 /*
  *  pid_a_kernel_thread
  *
  */
-static bool pid_a_kernel_thread(const char *task, const pid_t id)
+static bool pid_a_kernel_thread(const char *cmdline, const char *task, const pid_t id)
 {
-	if (sane_procs) {
-		return getpgid(id) == 0;
-	} else {
-		/* In side a container, make a guess at kernel threads */
-		int i;
-		pid_t pgid = getpgid(id);
+	pid_t pgid;
 
-		/* This fails for kernel threads inside a container */
-		if (pgid >= 0)
-			return pgid == 0;
+	if (sane_procs && (cmdline != NULL))
+		return (*cmdline == '\0');
 
-		/*
-		 * This is not exactly accurate, but if we can't look up
-		 * a process then try and infer something from the comm field.
-		 * Until we have better kernel support to map /proc/timer_stats
-		 * pids to containerised pids this is the best we can do.
-		 */
-		static kernel_task_info kernel_tasks[] = {
-			KERN_TASK_INFO("swapper/"),
-			KERN_TASK_INFO("kworker/"),
-			KERN_TASK_INFO("ksoftirqd/"),
-			KERN_TASK_INFO("watchdog/"),
-			KERN_TASK_INFO("migration/"),
-			KERN_TASK_INFO("irq/"),
-			KERN_TASK_INFO("mmcqd/"),
-			KERN_TASK_INFO("jbd2/"),
-			KERN_TASK_INFO("kthreadd"),
-			KERN_TASK_INFO("kthrotld"),
-			KERN_TASK_INFO("kswapd"),
-			KERN_TASK_INFO("ecryptfs-kthrea"),
-			KERN_TASK_INFO("kauditd"),
-			KERN_TASK_INFO("kblockd"),
-			KERN_TASK_INFO("kcryptd"),
-			KERN_TASK_INFO("kdevtmpfs"),
-			KERN_TASK_INFO("khelper"),
-			KERN_TASK_INFO("khubd"),
-			KERN_TASK_INFO("khugepaged"),
-			KERN_TASK_INFO("khungtaskd"),
-			KERN_TASK_INFO("flush-"),
-			KERN_TASK_INFO("bdi-default-"),
-			{ NULL, 0 }
-		};
+	/* We are either in a container, or with a task with a NULL cmdline */
+	pgid = getpgid(id);
+	if (pgid >= 0)
+		return (pgid == 0);
 
-		for (i = 0; kernel_tasks[i].task != NULL; i++) {
-			if (strncmp(task, kernel_tasks[i].task, kernel_tasks[i].len) == 0)
-				return true;
-		}
-	}
-
-	return false;
+	/* Can't get pgid on that pid, so make a guess */
+	return pid_a_kernel_thread_guess(task);
 }
 
 /*
@@ -547,11 +551,12 @@ static char *get_pid_cmdline(const pid_t id)
 	if ((fd = open(buffer, O_RDONLY)) < 0)
 		return NULL;
 
-	if ((ret = read(fd, buffer, sizeof(buffer))) <= 0) {
-		(void)close(fd);
-		return NULL;
-	}
+	ret = read(fd, buffer, sizeof(buffer));
 	(void)close(fd);
+	if (ret < 0)
+		return NULL;
+	if (ret == 0)
+		return strdup("");
 
 	buffer[sizeof(buffer)-1] = '\0';
 
@@ -628,7 +633,7 @@ static void samples_dump(const char *filename)
 	for (i = 0; i < n; i++) {
 		char *task;
 
-		if ((opt_flags & OPT_CMD) && (sorted_timer_infos[i]->cmdline != NULL))
+		if (opt_flags & OPT_CMD)
 			task = sorted_timer_infos[i]->cmdline;
 		else
 			task = sorted_timer_infos[i]->task_mangled;
@@ -761,7 +766,9 @@ static void samples_dump(const char *filename)
  *	try to find existing timer info in cache, and to the cache
  *	if it is new.
  */
-static timer_info_t *timer_info_find(const timer_info_t *new_info)
+static timer_info_t *timer_info_find(
+	const timer_info_t *new_info,
+	const char *ident)
 {
 	link_t *link;
 	timer_info_t *info;
@@ -780,18 +787,17 @@ static timer_info_t *timer_info_find(const timer_info_t *new_info)
 	info->pid = new_info->pid;
 	info->task = strdup(new_info->task);
 	info->task_mangled = strdup(new_info->task_mangled);
-	if (opt_flags & OPT_CMD)
-		info->cmdline = get_pid_cmdline(new_info->pid);
-
+	info->cmdline = strdup(new_info->cmdline);
 	info->func = strdup(new_info->func);
 	info->callback = strdup(new_info->callback);
-	info->ident = strdup(new_info->ident);
+	info->ident = strdup(ident);
 	info->kernel_thread = new_info->kernel_thread;
 	info->total = new_info->total;
 	info->time_total = new_info->time_total;
 
 	if (info->task == NULL ||
 	    info->task_mangled == NULL ||
+	    info->cmdline == NULL ||
 	    info->func == NULL ||
 	    info->callback == NULL ||
 	    info->ident == NULL) {
@@ -830,6 +836,18 @@ static void timer_info_free(void *data)
 static void timer_info_list_free(void)
 {
 	list_free(&timer_info_list, timer_info_free);
+}
+
+/*
+ *  make_hash_ident()
+ */
+static char *make_hash_ident(const timer_info_t *info)
+{
+	static char ident[4096];
+
+	snprintf(ident, sizeof(ident), "%d:%s:%s:%s:%s",
+		info->pid, info->task, info->func, info->callback, info->cmdline);
+	return ident;
 }
 
 /*
@@ -883,49 +901,30 @@ static void timer_stat_free_contents(
 static void timer_stat_add(
 	timer_stat_t *timer_stats[],	/* timer stat hash table */
 	const double time_now,		/* time sample was taken */
-	const uint64_t count,		/* event count */
-	const pid_t pid,		/* PID of task */
-	char *task,			/* Name of task */
-	char *task_mangled,		/* Mangled name of task */
-	char *func,			/* Kernel function */
-	char *callback,			/* Kernel timer callback */
-	const bool kernel_thread)	/* Is a kernel thread */
+	timer_info_t *info)		/* timer info to be added */
 {
-	char buf[4096];
 	timer_stat_t *ts;
 	timer_stat_t *ts_new;
-	timer_info_t info;
 	uint32_t h;
+	char *ident = make_hash_ident(info);
 
-	snprintf(buf, sizeof(buf), "%d:%s:%s:%s", pid, task, func, callback);
-	h = hash_pjw(buf);
+	h = hash_pjw(ident);
 	ts = timer_stats[h];
 
 	for (ts = timer_stats[h]; ts; ts = ts->next) {
-		if (strcmp(ts->info->ident, buf) == 0) {
-			ts->count += count;
+		if (strcmp(ts->info->ident, ident) == 0) {
+			ts->count += info->total;
 			return;
 		}
 	}
 	/* Not found, it is new! */
-
 	if ((ts_new = malloc(sizeof(timer_stat_t))) == NULL) {
 		fprintf(stderr, "Out of memory allocating a timer stat\n");
 		eventstat_exit(EXIT_FAILURE);
 	}
 
-	info.pid = pid;
-	info.task = task;
-	info.task_mangled = task_mangled;
-	info.func = func;
-	info.callback = callback;
-	info.ident = buf;
-	info.kernel_thread = kernel_thread;
-	info.total = count;
-	info.time_total = 0.0;
-
-	ts_new->count = count;
-	ts_new->info = timer_info_find(&info);
+	ts_new->count = info->total;
+	ts_new->info = timer_info_find(info, ident);
 	ts_new->next = timer_stats[h];
 	ts_new->time = time_now;
 	ts_new->sorted_freq_next = NULL;
@@ -942,14 +941,10 @@ static timer_stat_t *timer_stat_find(
 	timer_stat_t *needle)		/* timer stat to find */
 {
 	timer_stat_t *ts;
-	char buf[4096];
+	char *ident = make_hash_ident(needle->info);
 
-	snprintf(buf, sizeof(buf), "%d:%s:%s:%s",
-		needle->info->pid, needle->info->task,
-		needle->info->func, needle->info->callback);
-
-	for (ts = haystack[hash_pjw(buf)]; ts; ts = ts->next) {
-		if (strcmp(ts->info->ident, buf) == 0)
+	for (ts = haystack[hash_pjw(ident)]; ts; ts = ts->next) {
+		if (strcmp(ts->info->ident, ident) == 0)
 			return ts;
 	}
 
@@ -1044,8 +1039,7 @@ static void timer_stat_diff(
 					printf("%8.2f ", (double)sorted->delta / duration);
 
 				if (opt_flags & OPT_BRIEF) {
-					char *cmd = sorted->info->cmdline ?
-						sorted->info->cmdline : sorted->info->task_mangled;
+					char *cmd = sorted->info->cmdline;
 
 					printf("%5d %s\n",
 						sorted->info->pid,
@@ -1094,14 +1088,16 @@ static void get_events(
 	/* Originally from PowerTop, but majorly re-worked */
 	while (!feof(fp)) {
 		char *ptr = buf;
-		uint64_t count = 0;
-		pid_t pid = -1;
 		char task[64];
 		char task_mangled[64];
 		char func[128];
-		char timer[128];
-		bool kernel_thread;
+		char callback[128];
+		char *cmdline;
 		int mask;
+		timer_info_t info;
+
+		memset(&info, 0, sizeof(info));
+		info.pid = -1;
 
 		if (fgets(buf, sizeof(buf), fp) == NULL)
 			break;
@@ -1124,26 +1120,28 @@ static void get_events(
 			continue;	/* Deferred event, skip */
 
 		ptr++;
-		if (sscanf(buf, "%21" SCNu64, &count) != 1)
+		if (sscanf(buf, "%21" SCNu64, &info.total) != 1)
 			continue;
 		memset(task, 0, sizeof(task));
 		memset(func, 0, sizeof(func));
-		memset(timer, 0, sizeof(timer));
-		if (sscanf(ptr, "%10d %63s %127s (%127[^)])", &pid, task, func, timer) != 4)
+		memset(callback, 0, sizeof(callback));
+		if (sscanf(ptr, "%10d %63s %127s (%127[^)])", &info.pid, task, func, callback) != 4)
 			continue;
 
-		kernel_thread = pid_a_kernel_thread(task, pid);
+		/* Processes without a command line are kernel threads */
+		cmdline = get_pid_cmdline(info.pid);
+		info.kernel_thread = pid_a_kernel_thread(cmdline, task, info.pid);
 
 		/* Swapper is special, like all corner cases */
 		if (strncmp(task, "swapper", 6) == 0)
-			kernel_thread = true;
+			info.kernel_thread = true;
 
-		mask = kernel_thread ? OPT_KERNEL : OPT_USER;
+		mask = info.kernel_thread ? OPT_KERNEL : OPT_USER;
 
 		if (!(opt_flags & mask))
 			continue;
 
-		if (kernel_thread) {
+		if (info.kernel_thread) {
 			char tmp[sizeof(task)];
 
 			strcpy(tmp, task);
@@ -1163,8 +1161,17 @@ static void get_events(
 		    (strncmp(task, app_name, strlen(app_name)) == 0))
 			continue;
 
-		timer_stat_add(timer_stats, time_now, count, pid,
-			task, task_mangled, func, timer, kernel_thread);
+		info.task = task;
+		info.cmdline = cmdline ? cmdline : task_mangled;
+		info.task_mangled = task_mangled;
+		info.func = func;
+		info.callback = callback;
+		info.ident = buf;
+		info.time_total = 0.0;
+
+		timer_stat_add(timer_stats, time_now, &info);
+
+		free(cmdline);
 	}
 
 	(void)fclose(fp);

@@ -68,6 +68,7 @@ typedef void (*list_link_free_t)(void *);
 typedef struct timer_info {
 	pid_t		pid;
 	char 		*task;		/* Name of process/kernel task */
+	char 		*task_mangled;	/* Modified name of process/kernel task */
 	char		*cmdline;	/* From /proc/$pid/cmdline */
 	char		*func;		/* Kernel waiting func */
 	char		*callback;	/* Kernel timer callback func */
@@ -630,7 +631,7 @@ static void samples_dump(const char *filename)
 		if ((opt_flags & OPT_CMD) && (sorted_timer_infos[i]->cmdline != NULL))
 			task = sorted_timer_infos[i]->cmdline;
 		else
-			task = sorted_timer_infos[i]->task;
+			task = sorted_timer_infos[i]->task_mangled;
 
 		fprintf(fp, ",%s", task);
 	}
@@ -778,6 +779,7 @@ static timer_info_t *timer_info_find(const timer_info_t *new_info)
 
 	info->pid = new_info->pid;
 	info->task = strdup(new_info->task);
+	info->task_mangled = strdup(new_info->task_mangled);
 	if (opt_flags & OPT_CMD)
 		info->cmdline = get_pid_cmdline(new_info->pid);
 
@@ -789,6 +791,7 @@ static timer_info_t *timer_info_find(const timer_info_t *new_info)
 	info->time_total = new_info->time_total;
 
 	if (info->task == NULL ||
+	    info->task_mangled == NULL ||
 	    info->func == NULL ||
 	    info->callback == NULL ||
 	    info->ident == NULL) {
@@ -812,6 +815,7 @@ static void timer_info_free(void *data)
 	timer_info_t *info = (timer_info_t*)data;
 
 	free(info->task);
+	free(info->task_mangled);
 	free(info->cmdline);
 	free(info->func);
 	free(info->callback);
@@ -882,6 +886,7 @@ static void timer_stat_add(
 	const uint64_t count,		/* event count */
 	const pid_t pid,		/* PID of task */
 	char *task,			/* Name of task */
+	char *task_mangled,		/* Mangled name of task */
 	char *func,			/* Kernel function */
 	char *callback,			/* Kernel timer callback */
 	const bool kernel_thread)	/* Is a kernel thread */
@@ -911,6 +916,7 @@ static void timer_stat_add(
 
 	info.pid = pid;
 	info.task = task;
+	info.task_mangled = task_mangled;
 	info.func = func;
 	info.callback = callback;
 	info.ident = buf;
@@ -1039,15 +1045,15 @@ static void timer_stat_diff(
 
 				if (opt_flags & OPT_BRIEF) {
 					char *cmd = sorted->info->cmdline ?
-						sorted->info->cmdline : sorted->info->task;
+						sorted->info->cmdline : sorted->info->task_mangled;
 
 					printf("%5d %s\n",
 						sorted->info->pid,
 						(opt_flags & OPT_CMD) ?
-							cmd : sorted->info->task);
+							cmd : sorted->info->task_mangled);
 				} else {
 					printf("%5d %-15s %-25s %-s\n",
-						sorted->info->pid, sorted->info->task,
+						sorted->info->pid, sorted->info->task_mangled,
 						sorted->info->func, sorted->info->callback);
 				}
 			}
@@ -1091,6 +1097,7 @@ static void get_events(
 		uint64_t count = 0;
 		pid_t pid = -1;
 		char task[64];
+		char task_mangled[64];
 		char func[128];
 		char timer[128];
 		bool kernel_thread;
@@ -1137,10 +1144,13 @@ static void get_events(
 			continue;
 
 		if (kernel_thread) {
-			char tmp[64];
-			task[13] = '\0';
-			snprintf(tmp, sizeof(tmp), "[%s]", task);
-			strncpy(task, tmp, 13);
+			char tmp[sizeof(task)];
+
+			strcpy(tmp, task);
+			tmp[13] = '\0';
+			snprintf(task_mangled, sizeof(task_mangled), "[%s]", tmp);
+		} else {
+			strcpy(task_mangled, task);
 		}
 
 		if (strcmp(task, "insmod") == 0)
@@ -1153,7 +1163,8 @@ static void get_events(
 		    (strncmp(task, app_name, strlen(app_name)) == 0))
 			continue;
 
-		timer_stat_add(timer_stats, time_now, count, pid, task, func, timer, kernel_thread);
+		timer_stat_add(timer_stats, time_now, count, pid,
+			task, task_mangled, func, timer, kernel_thread);
 	}
 
 	(void)fclose(fp);

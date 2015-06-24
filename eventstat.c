@@ -38,7 +38,7 @@
 #include <math.h>
 #include <float.h>
 
-#define TABLE_SIZE		(32771)		/* Should be a prime */
+#define TABLE_SIZE		(1009)		/* Should be a prime */
 
 #define OPT_QUIET		(0x00000001)
 #define OPT_CUMULATIVE		(0x00000002)
@@ -51,6 +51,33 @@
 #define OPT_KERNEL		(0x00000100)
 #define OPT_USER		(0x00000200)
 #define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
+
+#define _VER_(major, minor, patchlevel) \
+	((major * 10000) + (minor * 100) + patchlevel)
+
+#if defined(__GNUC__) && defined(__GNUC_MINOR__)
+#if defined(__GNUC_PATCHLEVEL__)
+#define NEED_GNUC(major, minor, patchlevel) \
+	_VER_(major, minor, patchlevel) <= _VER_(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__)
+#else
+#define NEED_GNUC(major, minor, patchlevel) \
+	_VER_(major, minor, patchlevel) <= _VER_(__GNUC__, __GNUC_MINOR__, 0)
+#endif
+#else
+#define NEED_GNUC(major, minor, patchlevel) (0)
+#endif
+
+#if defined(__GNUC__) && NEED_GNUC(4,6,0)
+#define HOT __attribute__ ((hot))
+#else
+#define HOT
+#endif
+
+#if defined(__GNUC__) && !defined(__clang__) && NEED_GNUC(4,6,0)
+#define OPTIMIZE3 __attribute__((optimize("-O3")))
+#else
+#define OPTIMIZE3
+#endif
 
 typedef struct link {
 	void *data;			/* Data in list */
@@ -111,6 +138,7 @@ typedef struct {
 static const char *app_name = "eventstat";
 static const char *proc_timer_stats = "/proc/timer_stats";
 
+static timer_stat_t *timer_stat_free_list; /* free list of timer stats */
 static list_t timer_info_list;		/* cache list of timer_info */
 static list_t sample_list;		/* list of samples, sorted in sample time order */
 static char *csv_results;		/* results in comma separated values */
@@ -317,7 +345,7 @@ static inline void list_init(list_t *list)
  *  list_append()
  *	add a new item to end of the list
  */
-static link_t *list_append(list_t *list, void *data)
+static HOT link_t *list_append(list_t *list, void *data)
 {
 	link_t *link;
 
@@ -342,7 +370,7 @@ static link_t *list_append(list_t *list, void *data)
  *  list_free()
  *	free the list
  */
-static void list_free(list_t *list, const list_link_free_t freefunc)
+static HOT void list_free(list_t *list, const list_link_free_t freefunc)
 {
 	link_t	*link, *next;
 
@@ -385,7 +413,7 @@ static void sample_delta_free(void *data)
  *  samples_free()
  *	free collected samples
  */
-static void samples_free(void)
+static inline void samples_free(void)
 {
 	list_free(&sample_list, sample_delta_free);
 }
@@ -443,7 +471,7 @@ static void sample_add(
  *  sample_find()
  *	scan through a sample_delta_list for timer info, return NULL if not found
  */
-inline static sample_delta_item_t *sample_find(sample_delta_list_t *sdl, const timer_info_t *info)
+inline HOT static sample_delta_item_t *sample_find(sample_delta_list_t *sdl, const timer_info_t *info)
 {
 	link_t *link;
 
@@ -763,7 +791,7 @@ static void samples_dump(const char *filename)
  *	try to find existing timer info in cache, and to the cache
  *	if it is new.
  */
-static timer_info_t *timer_info_find(
+static HOT timer_info_t *timer_info_find(
 	const timer_info_t *new_info,
 	const char *ident)
 {
@@ -830,7 +858,7 @@ static void timer_info_free(void *data)
  *  timer_info_free
  *	free up all unique timer infos
  */
-static void timer_info_list_free(void)
+static inline void timer_info_list_free(void)
 {
 	list_free(&timer_info_list, timer_info_free);
 }
@@ -852,16 +880,33 @@ static char *make_hash_ident(const timer_info_t *info)
  *  hash_djb2a()
  *	Hash a string, from Dan Bernstein comp.lang.c (xor version)
  */
-static uint32_t hash_djb2a(const char *str)
+static HOT OPTIMIZE3 uint32_t hash_djb2a(const char *str)
 {
-	uint32_t hash = 5381;
-	int c;
+	register uint32_t hash = 5381;
+	register int c;
 
 	while ((c = *str++)) {
 		/* (hash * 33) ^ c */
 		hash = ((hash << 5) + hash) ^ c;
 	}
 	return hash % TABLE_SIZE;
+}
+
+/*
+ *  timer_stat_free_list_free()
+ *	free up the timer stat free list
+ */
+static void timer_stat_free_list_free(void)
+{
+	timer_stat_t *ts = timer_stat_free_list;
+
+	while (ts) {
+		timer_stat_t *next = ts->next;
+
+		free(ts);
+		ts = next;
+	}
+	timer_stat_free_list = NULL;
 }
 
 /*
@@ -878,7 +923,10 @@ static void timer_stat_free_contents(
 
 		while (ts) {
 			timer_stat_t *next = ts->next;
-			free(ts);
+
+			/* Add it onto the timer stat free list */
+			ts->next = timer_stat_free_list;
+			timer_stat_free_list = ts;
 
 			ts = next;
 		}
@@ -907,10 +955,17 @@ static void timer_stat_add(
 			return;
 		}
 	}
-	/* Not found, it is new! */
-	if ((ts_new = malloc(sizeof(timer_stat_t))) == NULL) {
-		fprintf(stderr, "Out of memory allocating a timer stat\n");
-		eventstat_exit(EXIT_FAILURE);
+	/* Not found, it is new */
+	if (timer_stat_free_list) {
+		/* Get new one from free list */
+		ts_new = timer_stat_free_list;
+		timer_stat_free_list = timer_stat_free_list->next;
+	} else {
+		/* Get one from heap */
+		if ((ts_new = malloc(sizeof(timer_stat_t))) == NULL) {
+			fprintf(stderr, "Out of memory allocating a timer stat\n");
+			eventstat_exit(EXIT_FAILURE);
+		}
 	}
 
 	ts_new->count = info->total;
@@ -926,7 +981,7 @@ static void timer_stat_add(
  *  timer_stat_find()
  *	find a timer stat (needle) in a timer stat hash table (haystack)
  */
-static timer_stat_t *timer_stat_find(
+static OPTIMIZE3 timer_stat_t *timer_stat_find(
 	timer_stat_t *haystack[],	/* timer stat hash table */
 	timer_stat_t *needle)		/* timer stat to find */
 {
@@ -972,7 +1027,7 @@ static void timer_stat_sort_freq_add(
  *	stats.  We are interested in just current and new timers, not ones that
  *	silently die
  */
-static void timer_stat_diff(
+static OPTIMIZE3 void timer_stat_diff(
 	const double duration,		/* time between each sample */
 	const int32_t n_lines,		/* number of lines to output */
 	const double whence,		/* nth sample */
@@ -1383,6 +1438,7 @@ abort:
 	free(timer_stats_new);
 	samples_free();
 	timer_info_list_free();
+	timer_stat_free_list_free();
 
 	eventstat_exit(EXIT_SUCCESS);
 }

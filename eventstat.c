@@ -1132,9 +1132,10 @@ static void get_events(
 			info.kernel_thread = true;
 
 		mask = info.kernel_thread ? OPT_KERNEL : OPT_USER;
-
-		if (!(opt_flags & mask))
+		if (!(opt_flags & mask)) {
+			free(cmdline);
 			continue;
+		}
 
 		if (info.kernel_thread) {
 			char tmp[sizeof(task)];

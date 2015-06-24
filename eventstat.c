@@ -1079,6 +1079,7 @@ static void get_events(
 {
 	FILE *fp;
 	char buf[4096];
+	const size_t app_name_len = strlen(app_name);
 
 	if ((fp = fopen(proc_timer_stats, "r")) == NULL) {
 		fprintf(stderr, "Cannot open %s\n", proc_timer_stats);
@@ -1156,21 +1157,18 @@ static void get_events(
 		if (strcmp(task, "modprobe") == 0)
 			strncpy(task, "[kern mod]", 13);
 
-		if ((strncmp(func, "tick_nohz_", 10) == 0) ||
-		    (strncmp(func, "tick_setup_sched_timer", 20) == 0) ||
-		    (strncmp(task, app_name, strlen(app_name)) == 0))
-			continue;
-
-		info.task = task;
-		info.cmdline = cmdline ? cmdline : task_mangled;
-		info.task_mangled = task_mangled;
-		info.func = func;
-		info.callback = callback;
-		info.ident = buf;
-		info.time_total = 0.0;
-
-		timer_stat_add(timer_stats, time_now, &info);
-
+		if (strncmp(func, "tick_nohz_", 10) &&
+		    strncmp(func, "tick_setup_sched_timer", 20) &&
+		    strncmp(task, app_name, app_name_len)) {
+			info.task = task;
+			info.cmdline = cmdline ? cmdline : task_mangled;
+			info.task_mangled = task_mangled;
+			info.func = func;
+			info.callback = callback;
+			info.ident = buf;
+			info.time_total = 0.0;
+			timer_stat_add(timer_stats, time_now, &info);
+		}
 		free(cmdline);
 	}
 

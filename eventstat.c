@@ -772,7 +772,7 @@ static timer_info_t *timer_info_find(
 
 	for (link = timer_info_list.head; link; link = link->next) {
 		info = (timer_info_t*)link->data;
-		if (strcmp(new_info->ident, info->ident) == 0)
+		if (strcmp(ident, info->ident) == 0)
 			return info;
 	}
 

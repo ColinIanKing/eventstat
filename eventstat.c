@@ -182,7 +182,7 @@ static const int signals[] = {
 static void set_timer_stat(const char *str, const bool carp)
 {
 	int fd;
-	ssize_t len = (ssize_t)strlen(str);
+	const ssize_t len = (ssize_t)strlen(str);
 
 	if ((fd = open(proc_timer_stats, O_WRONLY, S_IRUSR | S_IWUSR)) < 0) {
 		if (carp) {
@@ -481,7 +481,7 @@ static bool pid_a_kernel_thread_guess(const char *task)
 	 * Until we have better kernel support to map /proc/timer_stats
 	 * pids to containerised pids this is the best we can do.
 	 */
-	static kernel_task_info kernel_tasks[] = {
+	static const kernel_task_info kernel_tasks[] = {
 		KERN_TASK_INFO("swapper/"),
 		KERN_TASK_INFO("kworker/"),
 		KERN_TASK_INFO("ksoftirqd/"),
@@ -903,13 +903,10 @@ static void timer_stat_add(
 	const double time_now,		/* time sample was taken */
 	timer_info_t *info)		/* timer info to be added */
 {
-	timer_stat_t *ts;
+	const char *ident = make_hash_ident(info);
+	const uint32_t h = hash_pjw(ident);
+	timer_stat_t *ts = timer_stats[h];
 	timer_stat_t *ts_new;
-	uint32_t h;
-	char *ident = make_hash_ident(info);
-
-	h = hash_pjw(ident);
-	ts = timer_stats[h];
 
 	for (ts = timer_stats[h]; ts; ts = ts->next) {
 		if (strcmp(ts->info->ident, ident) == 0) {
@@ -941,7 +938,7 @@ static timer_stat_t *timer_stat_find(
 	timer_stat_t *needle)		/* timer stat to find */
 {
 	timer_stat_t *ts;
-	char *ident = make_hash_ident(needle->info);
+	const char *ident = make_hash_ident(needle->info);
 
 	for (ts = haystack[hash_pjw(ident)]; ts; ts = ts->next) {
 		if (strcmp(ts->info->ident, ident) == 0)

@@ -847,25 +847,21 @@ static char *make_hash_ident(const timer_info_t *info)
 	return ident;
 }
 
+
 /*
- *  hash_pjw()
- *	Hash a string, from Aho, Sethi, Ullman, Compiling Techniques.
+ *  hash_djb2a()
+ *	Hash a string, from Dan Bernstein comp.lang.c (xor version)
  */
-static uint32_t hash_pjw(const char *str)
+static uint32_t hash_djb2a(const char *str)
 {
-  	uint32_t h = 0;
+	uint32_t hash = 5381;
+	int c;
 
-	while (*str) {
-		uint32_t g;
-		h = (h << 4) + (*str);
-		if (0 != (g = h & 0xf0000000)) {
-			h = h ^ (g >> 24);
-			h = h ^ g;
-		}
-		str++;
+	while ((c = *str++)) {
+		/* (hash * 33) ^ c */
+		hash = ((hash << 5) + hash) ^ c;
 	}
-
-  	return h % TABLE_SIZE;
+	return hash % TABLE_SIZE;
 }
 
 /*
@@ -901,7 +897,7 @@ static void timer_stat_add(
 	timer_info_t *info)		/* timer info to be added */
 {
 	const char *ident = make_hash_ident(info);
-	const uint32_t h = hash_pjw(ident);
+	const uint32_t h = hash_djb2a(ident);
 	timer_stat_t *ts = timer_stats[h];
 	timer_stat_t *ts_new;
 
@@ -937,7 +933,7 @@ static timer_stat_t *timer_stat_find(
 	timer_stat_t *ts;
 	const char *ident = make_hash_ident(needle->info);
 
-	for (ts = haystack[hash_pjw(ident)]; ts; ts = ts->next) {
+	for (ts = haystack[hash_djb2a(ident)]; ts; ts = ts->next) {
 		if (strcmp(ts->info->ident, ident) == 0)
 			return ts;
 	}

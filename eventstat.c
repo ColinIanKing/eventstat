@@ -842,7 +842,7 @@ static char *make_hash_ident(const timer_info_t *info)
 {
 	static char ident[4096];
 
-	snprintf(ident, sizeof(ident), "%d:%s:%s:%s:%s",
+	snprintf(ident, sizeof(ident), "%x%s%s%s%s",
 		info->pid, info->task, info->func, info->callback, info->cmdline);
 	return ident;
 }

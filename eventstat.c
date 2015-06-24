@@ -52,6 +52,8 @@
 #define OPT_USER		(0x00000200)
 #define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
 
+#define EVENT_BUF_SIZE		(8192)
+
 #define _VER_(major, minor, patchlevel) \
 	((major * 10000) + (minor * 100) + patchlevel)
 
@@ -146,6 +148,7 @@ static volatile bool stop_eventstat = false;	/* set by sighandler */
 static double  opt_threshold;		/* ignore samples with event delta less than this */
 static uint32_t opt_flags;		/* option flags */
 static bool sane_procs;			/* false if we are in a container */
+static char *get_events_buf;		/* buffer to glob events into */
 
 /*
  *  Attempt to catch a range of signals so
@@ -1114,6 +1117,68 @@ static OPTIMIZE3 void timer_stat_diff(
 }
 
 /*
+ *  read_events()
+ *	read in events data into a global read buffer.
+ *	the buffer is auto-expanded where necessary and
+ *	only free'd at exit time.  This way we can parse
+ *	the data a little faster.
+ */
+static char *read_events(void)
+{
+	int fd;
+	static size_t get_events_size;
+	size_t size;
+
+	if (get_events_buf == NULL) {
+		if ((get_events_buf = malloc(EVENT_BUF_SIZE << 1)) == NULL) {
+			fprintf(stderr, "Cannot read %s, out of memory\n", proc_timer_stats);
+			return NULL;
+		}
+		get_events_size = (EVENT_BUF_SIZE << 1);
+	}
+
+	if ((fd = open(proc_timer_stats, O_RDONLY)) < 0) {
+		fprintf(stderr, "Cannot open %s\n", proc_timer_stats);
+		return NULL;
+	}
+
+	size = 0;
+	for (;;) {
+		ssize_t ret;
+		char buffer[EVENT_BUF_SIZE];
+
+		ret = read(fd, buffer, sizeof(buffer));
+		if (ret == 0)
+			break;
+		if (ret < 0) {
+			if ((errno == EINTR) ||
+			    (errno != EAGAIN)) {
+				continue;
+			}
+			break;
+		}
+		/* Do we need to expand the global buffer? */
+		if (size + ret >= get_events_size) {
+			char *tmpptr;
+
+			get_events_size += (EVENT_BUF_SIZE << 1);
+			tmpptr = realloc(get_events_buf, get_events_size + 1);
+			if (!tmpptr) {
+				fprintf(stderr, "Cannot read %s, out of memory\n", proc_timer_stats);
+				return NULL;
+			}
+			get_events_buf = tmpptr;
+		}
+		memcpy(get_events_buf + size, buffer, ret);
+		size += ret;
+		*(get_events_buf + size) = '\0';
+	}
+	(void)close(fd);
+
+	return get_events_buf;
+}
+
+/*
  *  get_events()
  *	scan /proc/timer_stats and populate a timer stat hash table with
  *	unique events
@@ -1122,57 +1187,55 @@ static void get_events(
 	timer_stat_t *timer_stats[],
 	const double time_now)
 {
-	FILE *fp;
-	char buf[4096];
+	char *tmpptr;
 	const size_t app_name_len = strlen(app_name);
 
-	if ((fp = fopen(proc_timer_stats, "r")) == NULL) {
-		fprintf(stderr, "Cannot open %s\n", proc_timer_stats);
+	if ((tmpptr = read_events()) == NULL)
 		return;
-	}
 
-	/* Originally from PowerTop, but majorly re-worked */
-	while (!feof(fp)) {
-		char *ptr = buf;
+	while (*tmpptr) {
+		char *ptr = tmpptr, *eol = tmpptr;
 		char task[64];
 		char task_mangled[64];
-		char func[128];
-		char callback[128];
+		char func[64];
+		char callback[64];
 		char *cmdline;
 		int mask;
 		timer_info_t info;
 
-		memset(&info, 0, sizeof(info));
-		info.pid = -1;
+		/* Find the end of a line */
+		while (*eol) {
+			if (*eol == '\n') {
+				*eol = '\0';
+				eol++;
+				break;
+			}
+			eol++;
+		}
 
-		if (fgets(buf, sizeof(buf), fp) == NULL)
+		/* Is this the last line we want to parse? */
+		if (strstr(tmpptr, "total events") != NULL)
 			break;
 
-		if (strstr(buf, "total events") != NULL)
-			break;
-
-		if (strstr(buf, ",") == NULL)
-			continue;
-
-		/* format: count[D], pid, task, func (timer) */
-
+		/* Looking for a format: "count[D], pid, task, func (timer)" */
 		while (*ptr && *ptr != ',')
 			ptr++;
-
 		if (*ptr != ',')
-			continue;
+			goto next;
+		if (ptr > tmpptr && *(ptr - 1) == 'D')
+			goto next;	/* Deferred event, skip */
 
-		if (ptr > buf && *(ptr-1) == 'D')
-			continue;	/* Deferred event, skip */
+		/* Now we're ready to fetch info fields */
+		memset(&info, 0, sizeof(info));
 
 		ptr++;
-		if (sscanf(buf, "%21" SCNu64, &info.total) != 1)
-			continue;
+		if (sscanf(tmpptr, "%21" SCNu64, &info.total) != 1)
+			goto next;
 		memset(task, 0, sizeof(task));
 		memset(func, 0, sizeof(func));
 		memset(callback, 0, sizeof(callback));
-		if (sscanf(ptr, "%10d %63s %127s (%127[^)])", &info.pid, task, func, callback) != 4)
-			continue;
+		if (sscanf(ptr, "%10d %63s %63s (%63[^)])", &info.pid, task, func, callback) != 4)
+			goto next;
 
 		/* Processes without a command line are kernel threads */
 		cmdline = get_pid_cmdline(info.pid);
@@ -1183,10 +1246,8 @@ static void get_events(
 			info.kernel_thread = true;
 
 		mask = info.kernel_thread ? OPT_KERNEL : OPT_USER;
-		if (!(opt_flags & mask)) {
-			free(cmdline);
-			continue;
-		}
+		if (!(opt_flags & mask))
+			goto free_next;
 
 		if (info.kernel_thread) {
 			char tmp[sizeof(task)];
@@ -1211,14 +1272,15 @@ static void get_events(
 			info.task_mangled = task_mangled;
 			info.func = func;
 			info.callback = callback;
-			info.ident = buf;
+			info.ident = tmpptr;
 			info.time_total = 0.0;
 			timer_stat_add(timer_stats, time_now, &info);
 		}
+free_next:
 		free(cmdline);
+next:
+		tmpptr = eol;
 	}
-
-	(void)fclose(fp);
 }
 
 /*
@@ -1439,6 +1501,7 @@ abort:
 	samples_free();
 	timer_info_list_free();
 	timer_stat_free_list_free();
+	free(get_events_buf);
 
 	eventstat_exit(EXIT_SUCCESS);
 }

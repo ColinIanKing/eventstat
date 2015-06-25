@@ -53,6 +53,8 @@
 #define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
 
 #define EVENT_BUF_SIZE		(8192)
+#define TIMER_REAP_AGE		(600)		/* How old a timer is before we reap it */
+#define TIMER_REAP_THRESHOLD	(30)
 
 #define _VER_(major, minor, patchlevel) \
 	((major * 10000) + (minor * 100) + patchlevel)
@@ -105,6 +107,7 @@ typedef struct timer_info {
 	bool		kernel_thread;	/* True if task is a kernel thread */
 	uint64_t	total;		/* Total number of events */
 	double		time_total;	/* Total time */
+	double		last_used;	/* Last referenced */
 } timer_info_t;
 
 typedef struct timer_stat {
@@ -142,6 +145,7 @@ static const char *proc_timer_stats = "/proc/timer_stats";
 
 static timer_stat_t *timer_stat_free_list; /* free list of timer stats */
 static list_t timer_info_list;		/* cache list of timer_info */
+static list_t timer_info_hash[TABLE_SIZE]; /* hash of timer_info */
 static list_t sample_list;		/* list of samples, sorted in sample time order */
 static char *csv_results;		/* results in comma separated values */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
@@ -202,6 +206,22 @@ static const int signals[] = {
 #endif
 	-1,
 };
+
+/*
+ *  hash_djb2a()
+ *	Hash a string, from Dan Bernstein comp.lang.c (xor version)
+ */
+static HOT OPTIMIZE3 uint32_t hash_djb2a(const char *str)
+{
+	register uint32_t hash = 5381;
+	register int c;
+
+	while ((c = *str++)) {
+		/* (hash * 33) ^ c */
+		hash = ((hash << 5) + hash) ^ c;
+	}
+	return hash % TABLE_SIZE;
+}
 
 /*
  *  set_timer_stat()
@@ -796,15 +816,19 @@ static void samples_dump(const char *filename)
  */
 static HOT timer_info_t *timer_info_find(
 	const timer_info_t *new_info,
-	const char *ident)
+	const char *ident,
+	const double time_now)
 {
 	link_t *link;
 	timer_info_t *info;
+	const uint32_t h = hash_djb2a(ident);
 
-	for (link = timer_info_list.head; link; link = link->next) {
+	for (link = timer_info_hash[h].head; link; link = link->next) {
 		info = (timer_info_t*)link->data;
-		if (strcmp(ident, info->ident) == 0)
+		if (strcmp(ident, info->ident) == 0) {
+			info->last_used = time_now;
 			return info;
+		}
 	}
 
 	if ((info = calloc(1, sizeof(timer_info_t))) == NULL) {
@@ -822,6 +846,7 @@ static HOT timer_info_t *timer_info_find(
 	info->kernel_thread = new_info->kernel_thread;
 	info->total = new_info->total;
 	info->time_total = new_info->time_total;
+	info->last_used = time_now;
 
 	if (info->task == NULL ||
 	    info->task_mangled == NULL ||
@@ -836,6 +861,7 @@ static HOT timer_info_t *timer_info_find(
 	/* Does not exist in list, append it */
 
 	list_append(&timer_info_list, info);
+	list_append(&timer_info_hash[h], info);
 
 	return info;
 }
@@ -857,12 +883,62 @@ static void timer_info_free(void *data)
 	free(info);
 }
 
+static void timer_info_purge_old_from_list(
+	list_t *list,
+	const double time_now,
+	bool do_free)
+{
+	link_t *link, *prev;
+
+	for (prev = NULL, link = list->head; link; ) {
+		link_t *next = link->next;
+		timer_info_t *info = (timer_info_t *)link->data;
+
+		if (info->last_used + TIMER_REAP_AGE < time_now) {
+			if (prev == NULL)
+				list->head = next;
+			else
+				prev->next = next;
+
+			if (do_free)
+				timer_info_free(link->data);
+			free(link);
+		}
+		link = next;
+	}
+}
+
 /*
- *  timer_info_free
+ *  timer_info_purge_old()
+ *  	clean out old timer infos
+ */
+static inline void timer_info_purge_old(const double time_now)
+{
+	size_t i;
+	static uint16_t count = 0;
+
+	count++;
+	if (count > TIMER_REAP_THRESHOLD) {
+		count = 0;
+		timer_info_purge_old_from_list(&timer_info_list, time_now, false);
+		for (i = 0; i < TABLE_SIZE; i++)
+			timer_info_purge_old_from_list(&timer_info_hash[i], time_now, true);
+	}
+}
+
+/*
+ *  timer_info_list_free()
  *	free up all unique timer infos
  */
 static inline void timer_info_list_free(void)
 {
+	size_t i;
+
+	/* Free lists on hash table, but not the infos */
+	for (i = 0; i < TABLE_SIZE; i++)
+		list_free(&timer_info_hash[i], NULL);
+
+	/* Free list and timers on list */
 	list_free(&timer_info_list, timer_info_free);
 }
 
@@ -876,23 +952,6 @@ static char *make_hash_ident(const timer_info_t *info)
 	snprintf(ident, sizeof(ident), "%x%s%s%s%s",
 		info->pid, info->task, info->func, info->callback, info->cmdline);
 	return ident;
-}
-
-
-/*
- *  hash_djb2a()
- *	Hash a string, from Dan Bernstein comp.lang.c (xor version)
- */
-static HOT OPTIMIZE3 uint32_t hash_djb2a(const char *str)
-{
-	register uint32_t hash = 5381;
-	register int c;
-
-	while ((c = *str++)) {
-		/* (hash * 33) ^ c */
-		hash = ((hash << 5) + hash) ^ c;
-	}
-	return hash % TABLE_SIZE;
 }
 
 /*
@@ -972,7 +1031,7 @@ static void timer_stat_add(
 	}
 
 	ts_new->count = info->total;
-	ts_new->info = timer_info_find(info, ident);
+	ts_new->info = timer_info_find(info, ident, time_now);
 	ts_new->next = timer_stats[h];
 	ts_new->time = time_now;
 	ts_new->sorted_freq_next = NULL;
@@ -1044,9 +1103,11 @@ static OPTIMIZE3 void timer_stat_diff(
 		timer_stat_t *ts;
 
 		for (ts = timer_stats_new[i]; ts; ts = ts->next) {
+			ts->info->last_used = whence;
 			timer_stat_t *found =
 				timer_stat_find(timer_stats_old, ts);
 			if (found) {
+				found->info->last_used = whence;
 				ts->delta = ts->count - found->count;
 				ts->time_delta = ts->time - found->time;
 				if (ts->delta >= opt_threshold) {
@@ -1234,6 +1295,7 @@ static void get_events(
 		memset(task, 0, sizeof(task));
 		memset(func, 0, sizeof(func));
 		memset(callback, 0, sizeof(callback));
+		info.pid = -1;
 		if (sscanf(ptr, "%10d %63s %63s (%63[^)])", &info.pid, task, func, callback) != 4)
 			goto next;
 
@@ -1490,6 +1552,8 @@ int main(int argc, char **argv)
 		tmp             = timer_stats_old;
 		timer_stats_old = timer_stats_new;
 		timer_stats_new = tmp;
+
+		timer_info_purge_old(time_now);
 	}
 abort:
 	samples_dump(csv_results);

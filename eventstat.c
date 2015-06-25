@@ -903,6 +903,8 @@ static void timer_info_purge_old_from_list(
 			if (do_free)
 				timer_info_free(link->data);
 			free(link);
+		} else {
+			prev = link;
 		}
 		link = next;
 	}

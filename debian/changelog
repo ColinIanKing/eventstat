@@ -1,3 +1,23 @@
+eventstat (0.01.37-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Fix repeaped prev pointer not advancing
+  * Fix resource leak on file descriptor on error exit path
+  * Add auto-purge of old state timer stats to stop memory growth
+  * Speed up reading and parsing of the timer stat data
+  * Add some performance optimisations, better hashing and heap management
+  * Make hash ident a few bytes smaller for marginal compare speedup
+  * Replace hash function with one that is 3.3x faster
+  * Fix hash chain growth by comparing with ident rather than an NULL field
+  * Free cmdline on mask check continue path
+  * Remove SIGSEGV from trapped signals list
+  * constify a few more variables
+  * Fix memory leak on cmdline, found by CoverityScan
+  * Improve kernel thread detection on unmodified task name (LP: #1467932)
+  * Compare process hashes based on original process name
+
+ -- Colin King <colin.king@canonical.com>  Thu, 25 Jun 2015 16:51:00 +0100
+
 eventstat (0.01.36-1) unstable; urgency=medium
 
   * Makefile: bump version

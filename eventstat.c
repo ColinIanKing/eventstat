@@ -1225,6 +1225,7 @@ static char *read_events(void)
 			get_events_size += (EVENT_BUF_SIZE << 1);
 			tmpptr = realloc(get_events_buf, get_events_size + 1);
 			if (!tmpptr) {
+				(void)close(fd);
 				fprintf(stderr, "Cannot read %s, out of memory\n", proc_timer_stats);
 				return NULL;
 			}

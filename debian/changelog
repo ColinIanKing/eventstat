@@ -1,3 +1,12 @@
+eventstat (0.02.00-1) unstable; urgency=medium
+
+  * Makefile: bump version to 0.02.00
+  * Re-order man page options into alphabetical order
+  * Add -w "whence" timestamp row option
+  * Add time column to CSV output
+
+ -- Colin King <colin.king@canonical.com>  Thu, 9 Jul 2015 21:33:00 +0100
+
 eventstat (0.01.37-1) unstable; urgency=medium
 
   * Makefile: bump version

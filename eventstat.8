@@ -30,8 +30,30 @@ eventstat is a program that dumps the current active system events.
 .SH OPTIONS
 eventstat options are as follow:
 .TP
+.B \-b
+just report events, PID and process name. By default the short task name from
+the kernel comm field will be displayed, however the \-s and \-l options 
+will report more process name information.
+.TP
+.B \-c
+report cumulative events rather than events per sample period.
+.TP
+.B \-C
+report the sample event count in the CSV output rather than the default
+events per second rate.
+.TP
+.B \-d
+strip full directory path off the process name in the CSV output.
+.TP
 .B \-h
 show help
+.TP
+.B \-k
+report just kernel threads.
+.TP
+.B \-l
+report long process name from /proc/pid/cmdline in CSV output. This reports
+the process name and all the command line arguments.
 .TP
 .B \-n event_count
 only display the first event_count number of top events.
@@ -48,37 +70,18 @@ source spread sheet.
 report short process name from /proc/pid/cmdline in CSV output. This reports
 just the process name.
 .TP
-.B \-l
-report long process name from /proc/pid/cmdline in CSV output. This reports
-the process name and all the command line arguments.
-.TP
-.B \-b
-just report events, PID and process name. By default the short task name from
-the kernel comm field will be displayed, however the \-s and \-l options 
-will report more process name information.
-.TP
-.B \-k
-report just kernel threads.
-.TP
-.B \-u
-report just user space processes.
-.TP
-.B \-C
-report the sample event count in the CSV output rather than the default
-events per second rate.
-.TP
 .B \-S
 report the minimum, maximum, average and population standard deviation
 at the end of the CSV output.
 .TP
-.B \-d
-strip full directory path off the process name in the CSV output.
-.TP
 .B \-t threshold
 ignore samples where the event delta per second less than the given threshold.
 .TP
-.B \-c
-report cumulative events rather than events per sample period.
+.B \-u
+report just user space processes.
+.TP
+.B \-w
+add timestamp (the "whence" info) to the output.
 .SH EXAMPLES
 .LP
 Dump events every second until stopped.

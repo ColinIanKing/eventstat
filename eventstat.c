@@ -51,6 +51,7 @@
 #define OPT_KERNEL		(0x00000100)
 #define OPT_USER		(0x00000200)
 #define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
+#define OPT_SHOW_WHENCE		(0x00000400)
 
 #define EVENT_BUF_SIZE		(8192)
 #define TIMER_REAP_AGE		(600)		/* How old a timer is before we reap it */
@@ -1097,6 +1098,7 @@ static void timer_stat_sort_freq_add(
  */
 static OPTIMIZE3 void timer_stat_diff(
 	const double duration,		/* time between each sample */
+	const double time_delta,	/* how long been running sofar */
 	const int32_t n_lines,		/* number of lines to output */
 	const double whence,		/* nth sample */
 	timer_stat_t *timer_stats_old[],/* old timer stats samples */
@@ -1177,6 +1179,16 @@ static OPTIMIZE3 void timer_stat_diff(
 			total, (double)total / duration,
 			(double)kt_total / duration,
 			(double)(total - kt_total) / duration);
+		if (opt_flags & OPT_SHOW_WHENCE) {
+			time_t t = (time_t)whence;
+			char *timestr = ctime(&t);
+			char *pos = strchr(timestr, '\n');
+
+			if (*pos)
+				*pos = '\0';
+			printf("Timestamp: %s, Total Run Duration: %.1f secs\n", timestr, time_delta);
+		}
+
 		if (!sane_procs)
 			printf("Note: this was run inside a container, kernel tasks were guessed.\n");
 		printf("\n");
@@ -1372,6 +1384,7 @@ static void show_usage(void)
 	printf("  -s\t\tuse short process name from /proc/pid/cmdline in CSV output.\n");
 	printf("  -S\t\tcalculate min, max, average and standard deviation in CSV output.\n");
 	printf("  -t threshold\tsamples less than the specified threshold are ignored.\n");
+	printf("  -w\t\tadd time stamp (when events occurred) to output.\n");
 }
 
 int main(int argc, char **argv)
@@ -1388,7 +1401,7 @@ int main(int argc, char **argv)
 	list_init(&sample_list);
 
 	for (;;) {
-		int c = getopt(argc, argv, "bcCdksSlhn:qr:t:u");
+		int c = getopt(argc, argv, "bcCdksSlhn:qr:t:uw");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -1446,6 +1459,9 @@ int main(int argc, char **argv)
 			break;
 		case 'u':
 			opt_flags |= OPT_USER;
+			break;
+		case 'w':
+			opt_flags |= OPT_SHOW_WHENCE;
 			break;
 		default:
 			show_usage();
@@ -1520,7 +1536,7 @@ int main(int argc, char **argv)
 
 	while (!stop_eventstat && (forever || count--)) {
 		struct timeval tv;
-		double secs, duration = duration_secs;
+		double secs, duration = duration_secs, time_delta;
 		int ret;
 
 		/* Timeout to wait for in the future for this sample */
@@ -1550,9 +1566,10 @@ int main(int argc, char **argv)
 		duration = gettime_to_double() - time_now;
 		duration = floor((duration * 100.0) + 0.5) / 100.0;
 		time_now = gettime_to_double();
+		time_delta = time_now - time_start;
 
 		get_events(timer_stats_new, time_now);
-		timer_stat_diff(duration, n_lines, time_now,
+		timer_stat_diff(duration, time_delta, n_lines, time_now,
 			timer_stats_old, timer_stats_new);
 		timer_stat_free_contents(timer_stats_old);
 

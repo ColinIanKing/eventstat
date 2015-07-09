@@ -645,7 +645,6 @@ static inline double duration_round(const double duration)
  */
 static void samples_dump(const char *filename)
 {
-	sample_delta_list_t	*sdl;
 	timer_info_t **sorted_timer_infos;
 	link_t	*link;
 	size_t i = 0;
@@ -677,7 +676,7 @@ static void samples_dump(const char *filename)
 
 	qsort(sorted_timer_infos, n, sizeof(timer_info_t *), info_compare_total);
 
-	fprintf(fp, "Task:");
+	fprintf(fp, "Time:,Task:");
 	for (i = 0; i < n; i++) {
 		char *task;
 
@@ -690,33 +689,38 @@ static void samples_dump(const char *filename)
 	}
 	fprintf(fp, "\n");
 
-	fprintf(fp, "Init Function:");
+	fprintf(fp, ",Init Function:");
 	for (i = 0; i < n; i++)
 		fprintf(fp, ",%s", sorted_timer_infos[i]->func);
 	fprintf(fp, "\n");
 
-	fprintf(fp, "Callback:");
+	fprintf(fp, ",Callback:");
 	for (i = 0; i < n; i++)
 		fprintf(fp, ",%s", sorted_timer_infos[i]->callback);
 	fprintf(fp, "\n");
 
-	fprintf(fp, "Total:");
+	fprintf(fp, ",Total:");
 	for (i = 0; i < n; i++)
 		fprintf(fp, ",%" PRIu64, sorted_timer_infos[i]->total);
 	fprintf(fp, "\n");
 
 	for (link = sample_list.head; link; link = link->next) {
+		sample_delta_list_t *sdl = (sample_delta_list_t*)link->data;
+		time_t t = (time_t)sdl->whence;
+		struct tm *tm;
+
 		count++;
-		sdl = (sample_delta_list_t*)link->data;
+		tm = localtime(&t);
+		fprintf(fp, "%2.2d:%2.2d:%2.2d",
+			tm->tm_hour, tm->tm_min, tm->tm_sec);
 
 		if (first_time < 0)
 			first_time = sdl->whence;
-		fprintf(fp, "%f", duration_round(sdl->whence - first_time));
+		fprintf(fp, ",%f", duration_round(sdl->whence - first_time));
 
 		/* Scan in timer info order to be consistent for all sdl rows */
 		for (i = 0; i < n; i++) {
 			sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
-
 			/*
 			 *  duration - if -C option is used then don't scale by the
 			 *  per sample duration time, instead give the raw sample count
@@ -736,12 +740,12 @@ static void samples_dump(const char *filename)
 	 *  -S option - some statistics, min, max, average, std.dev.
 	 */
 	if (opt_flags & OPT_RESULT_STATS) {
-		fprintf(fp, "Min:");
+		fprintf(fp, ",Min:");
 		for (i = 0; i < n; i++) {
 			double min = DBL_MAX;
 
 			for (link = sample_list.head; link; link = link->next) {
-				sdl = (sample_delta_list_t*)link->data;
+				sample_delta_list_t *sdl = (sample_delta_list_t*)link->data;
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 
 				if (sdi) {
@@ -755,12 +759,12 @@ static void samples_dump(const char *filename)
 		}
 		fprintf(fp, "\n");
 
-		fprintf(fp, "Max:");
+		fprintf(fp, ",Max:");
 		for (i = 0; i < n; i++) {
 			double max = DBL_MIN;
 
 			for (link = sample_list.head; link; link = link->next) {
-				sdl = (sample_delta_list_t*)link->data;
+				sample_delta_list_t *sdl = (sample_delta_list_t*)link->data;
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 
 				if (sdi) {
@@ -774,7 +778,7 @@ static void samples_dump(const char *filename)
 		}
 		fprintf(fp, "\n");
 
-		fprintf(fp, "Average:");
+		fprintf(fp, ",Average:");
 		for (i = 0; i < n; i++)
 			fprintf(fp, ",%f", count == 0 ? 0.0 :
 				(double)sorted_timer_infos[i]->total / count);
@@ -783,13 +787,13 @@ static void samples_dump(const char *filename)
 		/*
 		 *  population standard deviation
 		 */
-		fprintf(fp, "Std.Dev.:");
+		fprintf(fp, ",Std.Dev.:");
 		for (i = 0; i < n; i++) {
 			double average = (double)sorted_timer_infos[i]->total / (double)count;
 			double sum = 0.0;
 
 			for (link = sample_list.head; link; link = link->next) {
-				sdl = (sample_delta_list_t*)link->data;
+				sample_delta_list_t *sdl = (sample_delta_list_t*)link->data;
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 				if (sdi) {
 					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);

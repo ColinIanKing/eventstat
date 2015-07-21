@@ -84,20 +84,11 @@
 #define OPTIMIZE3
 #endif
 
-typedef struct link {
-	void *data;			/* Data in list */
-	struct link *next;		/* Next item in list */
-} link_t;
-
-typedef struct {
-	link_t	*head;			/* Head of list */
-	link_t	*tail;			/* Tail of list */
-	size_t	length;			/* Length of list */
-} list_t;
-
 typedef void (*list_link_free_t)(void *);
 
 typedef struct timer_info {
+	struct timer_info *next;	/* Next in list */
+	struct timer_info *hash_next;	/* Next in hash list */
 	pid_t		pid;
 	char 		*task;		/* Name of process/kernel task */
 	char 		*task_mangled;	/* Modified name of process/kernel task */
@@ -112,17 +103,18 @@ typedef struct timer_info {
 } timer_info_t;
 
 typedef struct timer_stat {
+	struct timer_stat *next;	/* Next timer stat in hash table */
+	struct timer_stat *sorted_freq_next; /* Next timer stat in event frequency sorted list */
 	uint64_t	count;		/* Number of events */
 	int64_t		delta;		/* Change in events since last time */
 	double		time;		/* Time of sample */
 	double		time_delta;	/* Change in time since last time */
 	timer_info_t	*info;		/* Timer info */
-	struct timer_stat *next;	/* Next timer stat in hash table */
-	struct timer_stat *sorted_freq_next; /* Next timer stat in event frequency sorted list */
 } timer_stat_t;
 
 /* sample delta item as an element of the sample_delta_list_t */
 typedef struct sample_delta_item {
+	struct sample_delta_item *next;	/* next in list */
 	int64_t		delta;		/* difference in timer events between old and new */
 	double		time_delta;	/* difference in time between old and new */
 	timer_info_t	*info;		/* timer this refers to */
@@ -130,8 +122,9 @@ typedef struct sample_delta_item {
 
 /* list of sample_delta_items */
 typedef struct sample_delta_list {
+	struct sample_delta_list *next;	/* next in list */
+	struct sample_delta_item *list;	/* list of sample delta items */
 	double		whence;		/* when the sample was taken */
-	list_t		list;
 } sample_delta_list_t;
 
 typedef struct {
@@ -145,9 +138,10 @@ static const char *app_name = "eventstat";
 static const char *proc_timer_stats = "/proc/timer_stats";
 
 static timer_stat_t *timer_stat_free_list; /* free list of timer stats */
-static list_t timer_info_list;		/* cache list of timer_info */
-static list_t timer_info_hash[TABLE_SIZE]; /* hash of timer_info */
-static list_t sample_list;		/* list of samples, sorted in sample time order */
+static timer_info_t *timer_info_list;	/* cache list of timer_info */
+static uint32_t timer_info_list_length;	/* length of timer_info_list */
+static timer_info_t *timer_info_hash[TABLE_SIZE]; /* hash of timer_info */
+static sample_delta_list_t *sample_delta_list;	/* list of samples, sorted in sample time order */
 static char *csv_results;		/* results in comma separated values */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
 static double  opt_threshold;		/* ignore samples with event delta less than this */
@@ -277,7 +271,6 @@ static inline double timeval_to_double(const struct timeval *const tv)
 	return (double)tv->tv_sec + ((double)tv->tv_usec / 1000000.0);
 }
 
-
 /*
  *  double_to_timeval
  *	seconds in double to timeval
@@ -350,61 +343,6 @@ static bool sane_proc_pid_info(void)
 }
 
 /*
- *  list_init()
- *	initialize list
- */
-static inline void list_init(list_t *list)
-{
-	list->head = NULL;
-	list->tail = NULL;
-	list->length = 0;
-}
-
-/*
- *  list_append()
- *	add a new item to end of the list
- */
-static HOT link_t *list_append(list_t *list, void *data)
-{
-	link_t *link;
-
-	if ((link = calloc(1, sizeof(link_t))) == NULL) {
-		fprintf(stderr, "Cannot allocate list link\n");
-		eventstat_exit(EXIT_FAILURE);
-	}
-	link->data = data;
-
-	if (list->head == NULL) {
-		list->head = link;
-	} else {
-		list->tail->next = link;
-	}
-	list->tail = link;
-	list->length++;
-
-	return link;
-}
-
-/*
- *  list_free()
- *	free the list
- */
-static HOT void list_free(list_t *list, const list_link_free_t freefunc)
-{
-	link_t	*link, *next;
-
-	if (list == NULL)
-		return;
-
-	for (link = list->head; link; link = next) {
-		next = link->next;
-		if (link->data && freefunc)
-			freefunc(link->data);
-		free(link);
-	}
-}
-
-/*
  *  handle_sig()
  *      catch signal, flag a stop and restore timer stat
  */
@@ -417,24 +355,24 @@ static void handle_sig(int dummy)
 }
 
 /*
- *  sample_delta_free()
- *	free the sample delta list
- */
-static void sample_delta_free(void *data)
-{
-	sample_delta_list_t *sdl = (sample_delta_list_t*)data;
-
-	list_free(&sdl->list, free);
-	free(sdl);
-}
-
-/*
  *  samples_free()
  *	free collected samples
  */
 static inline void samples_free(void)
 {
-	list_free(&sample_list, sample_delta_free);
+	sample_delta_list_t *sdl = sample_delta_list;
+
+	while (sdl) {
+		sample_delta_list_t *sdl_next = sdl->next;
+		sample_delta_item_t *sdi = sdl->list;
+		while (sdi) {
+			sample_delta_item_t *sdi_next = sdi->next;
+			free(sdi);
+			sdi = sdi_next;
+		}
+		free(sdl);
+		sdl = sdl_next;
+	}
 }
 
 /*
@@ -445,16 +383,14 @@ static void sample_add(
 	timer_stat_t *timer_stat,
 	const double whence)
 {
-	link_t	*link;
 	bool	found = false;
-	sample_delta_list_t *sdl = NULL;
+	sample_delta_list_t *sdl;
 	sample_delta_item_t *sdi;
 
 	if (csv_results == NULL)	/* No need if not request */
 		return;
 
-	for (link = sample_list.head; link; link = link->next) {
-		sdl = (sample_delta_list_t*)link->data;
+	for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
 		if (sdl->whence == whence) {
 			found = true;
 			break;
@@ -471,7 +407,8 @@ static void sample_add(
 			eventstat_exit(EXIT_FAILURE);
 		}
 		sdl->whence = whence;
-		list_append(&sample_list, sdl);
+		sdl->next = sample_delta_list;
+		sample_delta_list = sdl;
 	}
 
 	/* Now append the sdi onto the list */
@@ -483,7 +420,8 @@ static void sample_add(
 	sdi->time_delta = timer_stat->time_delta;
 	sdi->info  = timer_stat->info;
 
-	list_append(&sdl->list, sdi);
+	sdi->next = sdl->list;
+	sdl->list = sdi;
 }
 
 /*
@@ -492,10 +430,9 @@ static void sample_add(
  */
 inline HOT static sample_delta_item_t *sample_find(sample_delta_list_t *sdl, const timer_info_t *info)
 {
-	link_t *link;
+	sample_delta_item_t *sdi;
 
-	for (link = sdl->list.head; link; link = link->next) {
-		sample_delta_item_t *sdi = (sample_delta_item_t*)link->data;
+	for (sdi = sdl->list; sdi; sdi = sdi->next) {
 		if (sdi->info == info)
 			return sdi;
 	}
@@ -642,13 +579,14 @@ static inline double duration_round(const double duration)
 static void samples_dump(const char *filename)
 {
 	timer_info_t **sorted_timer_infos;
-	link_t	*link;
 	size_t i = 0;
-	size_t n = timer_info_list.length;
+	size_t n;
 	FILE *fp;
 	uint64_t count = 0;
 	double first_time = -1.0;
 	double duration;
+	timer_info_t *info;
+	sample_delta_list_t *sdl;
 
 	if (filename == NULL)
 		return;
@@ -658,14 +596,13 @@ static void samples_dump(const char *filename)
 		return;
 	}
 
-	if ((sorted_timer_infos = calloc(n, sizeof(timer_info_t*))) == NULL) {
+	if ((sorted_timer_infos = calloc(timer_info_list_length, sizeof(timer_info_t*))) == NULL) {
 		fprintf(stderr, "Cannot allocate buffer for sorting timer_infos\n");
 		eventstat_exit(EXIT_FAILURE);
 	}
 
 	/* Just want the timers with some non-zero total */
-	for (n = 0, link = timer_info_list.head; link; link = link->next) {
-		timer_info_t *info = (timer_info_t*)link->data;
+	for (n = 0, info = timer_info_list; info; info = info->next) {
 		if (info->total > 0)
 			sorted_timer_infos[n++] = info;
 	}
@@ -700,8 +637,7 @@ static void samples_dump(const char *filename)
 		fprintf(fp, ",%" PRIu64, sorted_timer_infos[i]->total);
 	fprintf(fp, "\n");
 
-	for (link = sample_list.head; link; link = link->next) {
-		sample_delta_list_t *sdl = (sample_delta_list_t*)link->data;
+	for (sdl = sample_delta_list; sdl; sdl= sdl->next) {
 		time_t t = (time_t)sdl->whence;
 		struct tm *tm;
 
@@ -739,9 +675,9 @@ static void samples_dump(const char *filename)
 		fprintf(fp, ",Min:");
 		for (i = 0; i < n; i++) {
 			double min = DBL_MAX;
+			sample_delta_list_t *sdl;
 
-			for (link = sample_list.head; link; link = link->next) {
-				sample_delta_list_t *sdl = (sample_delta_list_t*)link->data;
+			for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 
 				if (sdi) {
@@ -758,9 +694,9 @@ static void samples_dump(const char *filename)
 		fprintf(fp, ",Max:");
 		for (i = 0; i < n; i++) {
 			double max = DBL_MIN;
+			sample_delta_list_t *sdl;
 
-			for (link = sample_list.head; link; link = link->next) {
-				sample_delta_list_t *sdl = (sample_delta_list_t*)link->data;
+			for (sdl = sample_delta_list; sdl; sdl= sdl->next) {
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 
 				if (sdi) {
@@ -787,9 +723,9 @@ static void samples_dump(const char *filename)
 		for (i = 0; i < n; i++) {
 			double average = (double)sorted_timer_infos[i]->total / (double)count;
 			double sum = 0.0;
+			sample_delta_list_t *sdl;
 
-			for (link = sample_list.head; link; link = link->next) {
-				sample_delta_list_t *sdl = (sample_delta_list_t*)link->data;
+			for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
 				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
 				if (sdi) {
 					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
@@ -819,12 +755,10 @@ static HOT timer_info_t *timer_info_find(
 	const char *ident,
 	const double time_now)
 {
-	link_t *link;
 	timer_info_t *info;
 	const uint32_t h = hash_djb2a(ident);
 
-	for (link = timer_info_hash[h].head; link; link = link->next) {
-		info = (timer_info_t*)link->data;
+	for (info = timer_info_hash[h]; info; info = info->hash_next) {
 		if (strcmp(ident, info->ident) == 0) {
 			info->last_used = time_now;
 			return info;
@@ -860,8 +794,12 @@ static HOT timer_info_t *timer_info_find(
 
 	/* Does not exist in list, append it */
 
-	list_append(&timer_info_list, info);
-	list_append(&timer_info_hash[h], info);
+	info->next = timer_info_list;
+	timer_info_list = info;
+	timer_info_list_length++;
+
+	info->hash_next = timer_info_hash[h];
+	timer_info_hash[h] = info;
 
 	return info;
 }
@@ -883,30 +821,34 @@ static void timer_info_free(void *data)
 	free(info);
 }
 
+/*
+ *  timer_info_purge_old_from_list()
+ *	remove old timer info from list
+ */
 static void timer_info_purge_old_from_list(
-	list_t *list,
+	timer_info_t **list,
 	const double time_now,
 	bool do_free)
 {
-	link_t *link, *prev;
+	timer_info_t *prev = NULL, *info = *list;
 
-	for (prev = NULL, link = list->head; link; ) {
-		link_t *next = link->next;
-		timer_info_t *info = (timer_info_t *)link->data;
+	while (info) {
+		timer_info_t *next = info->next;
 
 		if (info->last_used + TIMER_REAP_AGE < time_now) {
 			if (prev == NULL)
-				list->head = next;
+				*list = next;
 			else
 				prev->next = next;
 
 			if (do_free)
-				timer_info_free(link->data);
-			free(link);
+				timer_info_free(info);
+
+			timer_info_list_length--;
 		} else {
-			prev = link;
+			prev = info;
 		}
-		link = next;
+		info = next;
 	}
 }
 
@@ -934,14 +876,15 @@ static inline void timer_info_purge_old(const double time_now)
  */
 static inline void timer_info_list_free(void)
 {
-	size_t i;
-
-	/* Free lists on hash table, but not the infos */
-	for (i = 0; i < TABLE_SIZE; i++)
-		list_free(&timer_info_hash[i], NULL);
+	timer_info_t *info = timer_info_list;
 
 	/* Free list and timers on list */
-	list_free(&timer_info_list, timer_info_free);
+	while (info) {
+		timer_info_t *next = info->next;
+
+		timer_info_free(info);
+		info = next;
+	}
 }
 
 /*
@@ -1391,9 +1334,6 @@ int main(int argc, char **argv)
 	bool forever = true;
 	struct sigaction new_action;
 	int i;
-
-	list_init(&timer_info_list);
-	list_init(&sample_list);
 
 	for (;;) {
 		int c = getopt(argc, argv, "bcCdksSlhn:qr:t:uw");

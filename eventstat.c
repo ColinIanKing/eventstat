@@ -887,10 +887,11 @@ static inline void timer_info_list_free(void)
  */
 static char *make_hash_ident(const timer_info_t *info)
 {
-	static char ident[4096];
+	static char ident[1024];
 
-	snprintf(ident, sizeof(ident), "%x%s%s%s%s",
-		info->pid, info->task, info->func, info->callback, info->cmdline);
+	snprintf(ident, sizeof(ident), "%x%s%8.8s%8.8s%s",
+		info->pid, info->task, info->func,
+		info->callback, info->cmdline);
 	return ident;
 }
 

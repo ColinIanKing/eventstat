@@ -84,8 +84,6 @@
 #define OPTIMIZE3
 #endif
 
-typedef void (*list_link_free_t)(void *);
-
 typedef struct timer_info {
 	struct timer_info *next;	/* Next in list */
 	struct timer_info *hash_next;	/* Next in hash list */
@@ -257,7 +255,6 @@ static void set_timer_stat(const char *str, const bool carp)
 static void __attribute__ ((noreturn)) eventstat_exit(const int status)
 {
 	set_timer_stat("0\n", false);
-
 	exit(status);
 }
 
@@ -281,7 +278,6 @@ static inline struct timeval double_to_timeval(const double val)
 
 	tv.tv_sec = val;
 	tv.tv_usec = (val - (time_t)val) * 1000000.0;
-
 	return tv;
 }
 
@@ -764,7 +760,6 @@ static HOT timer_info_t *timer_info_find(
 			return info;
 		}
 	}
-
 	if ((info = calloc(1, sizeof(timer_info_t))) == NULL) {
 		fprintf(stderr, "Cannot allocate timer info\n");
 		eventstat_exit(EXIT_FAILURE);

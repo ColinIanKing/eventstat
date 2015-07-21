@@ -257,15 +257,10 @@ static void set_timer_stat(const char *str, const bool carp)
 
 
 /*
- *  Stop gcc complaining about no return func
- */
-static void eventstat_exit(const int status) __attribute__ ((noreturn));
-
-/*
  *  eventstat_exit()
  *	exit and set timer stat to 0
  */
-static void eventstat_exit(const int status)
+static void __attribute__ ((noreturn)) eventstat_exit(const int status)
 {
 	set_timer_stat("0\n", false);
 

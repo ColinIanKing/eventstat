@@ -853,11 +853,12 @@ static void timer_info_purge_old_from_list(
  */
 static inline void timer_info_purge_old(const double time_now)
 {
-	size_t i;
 	static uint16_t count = 0;
 
 	count++;
 	if (count > TIMER_REAP_THRESHOLD) {
+		size_t i;
+
 		count = 0;
 		timer_info_purge_old_from_list(&timer_info_list, time_now, false);
 		for (i = 0; i < TABLE_SIZE; i++)

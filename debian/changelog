@@ -1,3 +1,16 @@
+eventstat (0.02.01-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Makefile: Use -O2 optimisation level
+  * Reduce scope of variable i
+  * Shorten hash ident string, we only require so much to hash on
+  * Signed-off-by: Colin Ian King <colin.king@canonical.com>
+  * Minor code clean up
+  * Replace generic lists with type specific lists
+  * Move __attribute__ ((noreturn))
+
+ -- Colin King <colin.king@canonical.com>  Fri, 31 Jul 2015 00:00:09 +0100
+
 eventstat (0.02.00-1) unstable; urgency=medium
 
   * Makefile: bump version to 0.02.00

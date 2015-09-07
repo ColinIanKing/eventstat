@@ -950,8 +950,7 @@ static void timer_stat_add(
 {
 	const char *ident = make_hash_ident(info);
 	const uint32_t h = hash_djb2a(ident);
-	timer_stat_t *ts = timer_stats[h];
-	timer_stat_t *ts_new;
+	timer_stat_t *ts, *ts_new;
 
 	for (ts = timer_stats[h]; ts; ts = ts->next) {
 		if (strcmp(ts->info->ident, ident) == 0) {

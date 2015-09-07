@@ -1468,7 +1468,7 @@ int main(int argc, char **argv)
 
 	while (!stop_eventstat && (forever || count--)) {
 		struct timeval tv;
-		double secs, duration = duration_secs, time_delta;
+		double secs, duration, time_delta;
 		int ret;
 
 		/* Timeout to wait for in the future for this sample */

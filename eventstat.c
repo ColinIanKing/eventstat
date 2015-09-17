@@ -95,6 +95,7 @@ typedef struct timer_info {
 	char		*callback;	/* Kernel timer callback func */
 	char		*ident;		/* Unique identity */
 	bool		kernel_thread;	/* True if task is a kernel thread */
+	uint32_t	ref_count;	/* timer stat reference count */
 	uint64_t	total;		/* Total number of events */
 	double		time_total;	/* Total time */
 	double		last_used;	/* Last referenced */
@@ -776,6 +777,7 @@ static HOT timer_info_t *timer_info_find(
 	info->total = new_info->total;
 	info->time_total = new_info->time_total;
 	info->last_used = time_now;
+	info->ref_count = 0;
 
 	if (info->task == NULL ||
 	    info->task_mangled == NULL ||
@@ -808,8 +810,9 @@ static void timer_info_free(void *data)
 	timer_info_t *info = (timer_info_t*)data;
 
 	free(info->task);
+	if (info->cmdline != info->task_mangled)
+		free(info->cmdline);
 	free(info->task_mangled);
-	free(info->cmdline);
 	free(info->func);
 	free(info->callback);
 	free(info->ident);
@@ -817,28 +820,28 @@ static void timer_info_free(void *data)
 }
 
 /*
- *  timer_info_purge_old_from_list()
- *	remove old timer info from list
+ *  timer_info_purge_old_from_timer_list()
+ *	remove old timer info from the timer list
  */
-static void timer_info_purge_old_from_list(
+static void timer_info_purge_old_from_timer_list(
 	timer_info_t **list,
-	const double time_now,
-	bool do_free)
+	const double time_now)
 {
 	timer_info_t *prev = NULL, *info = *list;
 
 	while (info) {
 		timer_info_t *next = info->next;
 
-		if (info->last_used + TIMER_REAP_AGE < time_now) {
+		/*
+		 * Only remove from list once all timer
+		 * stats no longer reference it
+		 */
+		if ((info->ref_count == 0) &&
+		    (info->last_used + TIMER_REAP_AGE < time_now)) {
 			if (prev == NULL)
 				*list = next;
 			else
 				prev->next = next;
-
-			if (do_free)
-				timer_info_free(info);
-
 			timer_info_list_length--;
 		} else {
 			prev = info;
@@ -846,6 +849,39 @@ static void timer_info_purge_old_from_list(
 		info = next;
 	}
 }
+
+/*
+ *  timer_info_purge_old_from_hash_list()
+ *	remove old timer info from a hash list
+ */
+static void timer_info_purge_old_from_hash_list(
+	timer_info_t **list,
+	const double time_now)
+{
+	timer_info_t *prev = NULL, *info = *list;
+
+	while (info) {
+		timer_info_t *next = info->hash_next;
+
+		/*
+		 * Only remove and free once all timer stats no
+		 * longer reference it
+		 */
+		if ((info->ref_count == 0) &&
+		    (info->last_used + TIMER_REAP_AGE < time_now)) {
+			if (prev == NULL)
+				*list = next;
+			else
+				prev->hash_next = next;
+
+			timer_info_free(info);
+		} else {
+			prev = info;
+		}
+		info = next;
+	}
+}
+
 
 /*
  *  timer_info_purge_old()
@@ -860,9 +896,9 @@ static inline void timer_info_purge_old(const double time_now)
 		size_t i;
 
 		count = 0;
-		timer_info_purge_old_from_list(&timer_info_list, time_now, false);
+		timer_info_purge_old_from_timer_list(&timer_info_list, time_now);
 		for (i = 0; i < TABLE_SIZE; i++)
-			timer_info_purge_old_from_list(&timer_info_hash[i], time_now, true);
+			timer_info_purge_old_from_hash_list(&timer_info_hash[i], time_now);
 	}
 }
 
@@ -928,6 +964,8 @@ static void timer_stat_free_contents(
 		while (ts) {
 			timer_stat_t *next = ts->next;
 
+			/* Decrement info ref count */
+			ts->info->ref_count--;
 			/* Add it onto the timer stat free list */
 			ts->next = timer_stat_free_list;
 			timer_stat_free_list = ts;
@@ -973,6 +1011,7 @@ static void timer_stat_add(
 
 	ts_new->count = info->total;
 	ts_new->info = timer_info_find(info, ident, time_now);
+	ts_new->info->ref_count++;
 	ts_new->next = timer_stats[h];
 	ts_new->time = time_now;
 	ts_new->sorted_freq_next = NULL;

@@ -1,3 +1,14 @@
+eventstat (0.02.02-1) unstable; urgency=medium
+
+  * fix segfault when removing stale timer stats (LP: #1496900)
+  * Makefile: bump version
+  * Debian: update compat to 9
+  * Debian: control, update debhelper dependency on version 9
+  * remove duplicate initialisation to ts from timer_stats hash
+  * Don't initialise duration, it is set later on
+
+ -- Colin King <colin.king@canonical.com>  Thu, 17 Sep 2015 16:14:17 +0100
+
 eventstat (0.02.01-1) unstable; urgency=medium
 
   * Makefile: bump version

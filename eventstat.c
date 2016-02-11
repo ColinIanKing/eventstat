@@ -273,18 +273,16 @@ static void set_timer_stat(const char *str, const bool carp)
 		if (carp) {
 			err_abort("Cannot open %s, errno=%d (%s)\n",
 				proc_timer_stats, errno, strerror(errno));
-		} else {
-			return;
 		}
+		return;
 	}
 	if (write(fd, str, len) != len) {
 		close(fd);
 		if (carp) {
 			err_abort("Cannot write to %s, errno=%d (%s)\n",
 				proc_timer_stats, errno, strerror(errno));
-		} else {
-			return;
 		}
+		return;
 	}
 	(void)close(fd);
 }

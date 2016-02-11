@@ -1552,7 +1552,9 @@ int main(int argc, char **argv)
 
 		memset(&sa, 0, sizeof(sa));
 		sa.sa_handler = handle_sigwinch;
-		sigaction(SIGWINCH, &sa, NULL);
+		if (sigaction(SIGWINCH, &sa, NULL) < 0)
+			err_abort("sigaction failed: errno=%d (%s)\n",
+				errno, strerror(errno));
 
 		initscr();
 		cbreak();

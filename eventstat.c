@@ -457,7 +457,9 @@ static void sample_add(
  *  sample_find()
  *	scan through a sample_delta_list for timer info, return NULL if not found
  */
-inline HOT static sample_delta_item_t *sample_find(sample_delta_list_t *sdl, const timer_info_t *info)
+inline HOT static sample_delta_item_t *sample_find(
+	sample_delta_list_t *sdl,
+	const timer_info_t *info)
 {
 	sample_delta_item_t *sdi;
 
@@ -529,7 +531,10 @@ static bool pid_a_kernel_thread_guess(const char *task)
  *  pid_a_kernel_thread
  *
  */
-static bool pid_a_kernel_thread(const char *cmdline, const char *task, const pid_t id)
+static bool pid_a_kernel_thread(
+	const char *cmdline,
+	const char *task,
+	const pid_t id)
 {
 	pid_t pgid;
 

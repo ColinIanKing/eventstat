@@ -1,3 +1,23 @@
+eventstat (0.03.01-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Update manual to reflect -l -s mode on tty output
+  * Show long or short command line info in tty output and not just in CSV
+  * Add smart column resizing based on variable tty width
+  * Add some small ncurses helpers for top only mode
+  * Clean up -h info, make it 80 column friendly
+  * Remove a few empty lines in source
+  * Re-align global vars so there is less wasted padding
+  * Make source 80 column friendly
+  * es_printf: emit curses output if curses_init is true
+  * Reformat overly long function declarations
+  * Minor code improvement in set_timer_stat
+  * check for failed sigaction on SIGWINCH
+  * Improve error handling with some error message and clean up helpers
+  * Call endwin() only in top mode
+
+ -- Colin King <colin.king@canonical.com>  Thu, 11 Feb 2016 11:09:11 +0000
+
 eventstat (0.03.00-1) unstable; urgency=medium
 
   * Makefile: bump version

@@ -1411,20 +1411,22 @@ static void show_usage(void)
 {
 	printf("%s, version %s\n\n", app_name, VERSION);
 	printf("Usage: %s [options] [duration] [count]\n", app_name);
-	printf("Options are:\n");
-	printf("  -c\t\treport cumulative events rather than events per second.\n");
-	printf("  -C\t\treport event count rather than event per second in CSV output.\n");
-	printf("  -d\t\tremove pathname from long process name in CSV output.\n");
-	printf("  -h\t\tprint this help.\n");
-	printf("  -l\t\tuse long cmdline text from /proc/pid/cmdline in CSV output.\n");
-	printf("  -n events\tspecifies number of events to display.\n");
-	printf("  -q\t\trun quietly, useful with option -r.\n");
-	printf("  -r filename\tspecifies a comma separated values (CSV) output file to dump samples into.\n");
-	printf("  -s\t\tuse short process name from /proc/pid/cmdline in CSV output.\n");
-	printf("  -S\t\tcalculate min, max, average and standard deviation in CSV output.\n");
-	printf("  -t threshold\tsamples less than the specified threshold are ignored.\n");
-	printf("  -T\t\tenable \'top\' mode rather than a scrolling output.\n");
-	printf("  -w\t\tadd time stamp (when events occurred) to output.\n");
+	printf("Options are:\n"
+		"  -c\t\treport cumulative events rather than events per second.\n"
+		"  -C\t\treport event count rather than event per second in CSV output.\n"
+		"  -d\t\tremove pathname from long process name in CSV output.\n"
+		"  -h\t\tprint this help.\n"
+		"  -l\t\tuse long cmdline text from /proc/pid/cmdline in CSV output.\n"
+		"  -n events\tspecifies number of events to display.\n"
+		"  -q\t\trun quietly, useful with option -r.\n"
+		"  -r filename\tspecifies a comma separated values (CSV) output file\n"
+		"\t\tto dump samples into.\n"
+		"  -s\t\tuse short process name from /proc/pid/cmdline in CSV output.\n"
+		"  -S\t\tcalculate min, max, average and standard deviation in CSV\n"
+		"\t\toutput.\n"
+		"  -t threshold\tsamples less than the specified threshold are ignored.\n"
+		"  -T\t\tenable \'top\' mode rather than a scrolling output.\n"
+		"  -w\t\tadd time stamp (when events occurred) to output.\n");
 }
 
 /*

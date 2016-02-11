@@ -151,6 +151,7 @@ static uint32_t opt_flags;		/* option flags */
 static bool sane_procs;			/* false if we are in a container */
 static char *get_events_buf;		/* buffer to glob events into */
 static bool resized;			/* window resized */
+static bool curses_init;		/* curses initialised */
 
 /*
  *  Attempt to catch a range of signals so
@@ -222,6 +223,44 @@ static HOT OPTIMIZE3 uint32_t hash_djb2a(const char *str)
 }
 
 /*
+ *  eventstat_clear();
+ *  	clear screen if in top mode
+ */
+static void eventstat_clear(void)
+{
+	if (curses_init)
+		clear();
+}
+
+/*
+ *  eventstat_endwin()
+ *	call endwin if in top mode
+ */
+static void eventstat_endwin(void)
+{
+	if (curses_init) {
+		clear();
+		endwin();
+	}
+}
+
+/*
+ *  err_abort()
+ *	print an error and exit
+ */
+static void __attribute__ ((noreturn)) err_abort(const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	eventstat_endwin();
+	vfprintf(stderr,fmt, ap);
+	va_end(ap);
+
+	exit(EXIT_FAILURE);
+}
+
+/*
  *  set_timer_stat()
  *	enable/disable timer stat
  */
@@ -232,9 +271,8 @@ static void set_timer_stat(const char *str, const bool carp)
 
 	if ((fd = open(proc_timer_stats, O_WRONLY, S_IRUSR | S_IWUSR)) < 0) {
 		if (carp) {
-			fprintf(stderr, "Cannot open %s, errno=%d (%s)\n",
+			err_abort("Cannot open %s, errno=%d (%s)\n",
 				proc_timer_stats, errno, strerror(errno));
-			exit(EXIT_FAILURE);
 		} else {
 			return;
 		}
@@ -242,16 +280,14 @@ static void set_timer_stat(const char *str, const bool carp)
 	if (write(fd, str, len) != len) {
 		close(fd);
 		if (carp) {
-			fprintf(stderr, "Cannot write to %s, errno=%d (%s)\n",
+			err_abort("Cannot write to %s, errno=%d (%s)\n",
 				proc_timer_stats, errno, strerror(errno));
-			exit(EXIT_FAILURE);
 		} else {
 			return;
 		}
 	}
 	(void)close(fd);
 }
-
 
 /*
  *  eventstat_exit()
@@ -294,11 +330,9 @@ static double gettime_to_double(void)
 {
 	struct timeval tv;
 
-	if (gettimeofday(&tv, NULL) < 0) {
-		fprintf(stderr, "gettimeofday failed: errno=%d (%s)\n",
+	if (gettimeofday(&tv, NULL) < 0)
+		err_abort("gettimeofday failed: errno=%d (%s)\n",
 			errno, strerror(errno));
-		eventstat_exit(EXIT_FAILURE);
-	}
 	return timeval_to_double(&tv);
 }
 
@@ -403,20 +437,16 @@ static void sample_add(
 	 * list since time is assumed to be increasing
 	 */
 	if (!found) {
-		if ((sdl = calloc(1, sizeof(sample_delta_list_t))) == NULL) {
-			fprintf(stderr, "Cannot allocate sample delta list\n");
-			eventstat_exit(EXIT_FAILURE);
-		}
+		if ((sdl = calloc(1, sizeof(sample_delta_list_t))) == NULL)
+			err_abort("Cannot allocate sample delta list\n");
 		sdl->whence = whence;
 		sdl->next = sample_delta_list;
 		sample_delta_list = sdl;
 	}
 
 	/* Now append the sdi onto the list */
-	if ((sdi = calloc(1, sizeof(sample_delta_item_t))) == NULL) {
-		fprintf(stderr, "Cannot allocate sample delta item\n");
-		eventstat_exit(EXIT_FAILURE);
-	}
+	if ((sdi = calloc(1, sizeof(sample_delta_item_t))) == NULL)
+		err_abort("Cannot allocate sample delta item\n");
 	sdi->delta = timer_stat->delta;
 	sdi->time_delta = timer_stat->time_delta;
 	sdi->info  = timer_stat->info;
@@ -597,10 +627,8 @@ static void samples_dump(const char *filename)
 		return;
 	}
 
-	if ((sorted_timer_infos = calloc(timer_info_list_length, sizeof(timer_info_t*))) == NULL) {
-		fprintf(stderr, "Cannot allocate buffer for sorting timer_infos\n");
-		eventstat_exit(EXIT_FAILURE);
-	}
+	if ((sorted_timer_infos = calloc(timer_info_list_length, sizeof(timer_info_t*))) == NULL)
+		err_abort("Cannot allocate buffer for sorting timer_infos\n");
 
 	/* Just want the timers with some non-zero total */
 	for (n = 0, info = timer_info_list; info; info = info->next) {
@@ -765,10 +793,8 @@ static HOT timer_info_t *timer_info_find(
 			return info;
 		}
 	}
-	if ((info = calloc(1, sizeof(timer_info_t))) == NULL) {
-		fprintf(stderr, "Cannot allocate timer info\n");
-		eventstat_exit(EXIT_FAILURE);
-	}
+	if ((info = calloc(1, sizeof(timer_info_t))) == NULL)
+		err_abort("Cannot allocate timer info\n");
 
 	info->pid = new_info->pid;
 	info->task = strdup(new_info->task);
@@ -789,8 +815,7 @@ static HOT timer_info_t *timer_info_find(
 	    info->func == NULL ||
 	    info->callback == NULL ||
 	    info->ident == NULL) {
-		fprintf(stderr, "Out of memory allocating a timer stat fields\n");
-		eventstat_exit(EXIT_FAILURE);
+		err_abort("Out of memory allocating a timer stat fields\n");
 	}
 
 	/* Does not exist in list, append it */
@@ -1007,10 +1032,8 @@ static void timer_stat_add(
 		timer_stat_free_list = timer_stat_free_list->next;
 	} else {
 		/* Get one from heap */
-		if ((ts_new = malloc(sizeof(timer_stat_t))) == NULL) {
-			fprintf(stderr, "Out of memory allocating a timer stat\n");
-			eventstat_exit(EXIT_FAILURE);
-		}
+		if ((ts_new = malloc(sizeof(timer_stat_t))) == NULL)
+			err_abort("Out of memory allocating a timer stat\n");
 	}
 
 	ts_new->count = info->total;
@@ -1210,17 +1233,14 @@ static char *read_events(void)
 	size_t size;
 
 	if (get_events_buf == NULL) {
-		if ((get_events_buf = malloc(EVENT_BUF_SIZE << 1)) == NULL) {
-			fprintf(stderr, "Cannot read %s, out of memory\n", proc_timer_stats);
-			return NULL;
-		}
+		if ((get_events_buf = malloc(EVENT_BUF_SIZE << 1)) == NULL)
+			err_abort("Cannot read %s, out of memory\n", proc_timer_stats);
+
 		get_events_size = (EVENT_BUF_SIZE << 1);
 	}
 
-	if ((fd = open(proc_timer_stats, O_RDONLY)) < 0) {
-		fprintf(stderr, "Cannot open %s\n", proc_timer_stats);
-		return NULL;
-	}
+	if ((fd = open(proc_timer_stats, O_RDONLY)) < 0)
+		err_abort("Cannot open %s\n", proc_timer_stats);
 
 	size = 0;
 	for (;;) {
@@ -1245,8 +1265,7 @@ static char *read_events(void)
 			tmpptr = realloc(get_events_buf, get_events_size + 1);
 			if (!tmpptr) {
 				(void)close(fd);
-				fprintf(stderr, "Cannot read %s, out of memory\n", proc_timer_stats);
-				return NULL;
+				err_abort("Cannot read %s, out of memory\n", proc_timer_stats);
 			}
 			get_events_buf = tmpptr;
 		}
@@ -1434,21 +1453,15 @@ int main(int argc, char **argv)
 		case 'n':
 			errno = 0;
 			n_lines = (int32_t)strtol(optarg, NULL, 10);
-			if (errno) {
-				fprintf(stderr, "Invalid value for number of events to display\n");
-				eventstat_exit(EXIT_FAILURE);
-			}
-			if (n_lines < 1) {
-				fprintf(stderr, "-n option must be greater than 0\n");
-				eventstat_exit(EXIT_FAILURE);
-			}
+			if (errno)
+				err_abort("Invalid value for number of events to display\n");
+			if (n_lines < 1)
+				err_abort("-n option must be greater than 0\n");
 			break;
 		case 't':
 			opt_threshold = strtoull(optarg, NULL, 10);
-			if (opt_threshold < 1) {
-				fprintf(stderr, "-t threshold must be 1 or more.\n");
-				eventstat_exit(EXIT_FAILURE);
-			}
+			if (opt_threshold < 1)
+				err_abort("-t threshold must be 1 or more.\n");
 			break;
 		case 'T':
 			opt_flags |= OPT_TOP;
@@ -1488,33 +1501,25 @@ int main(int argc, char **argv)
 
 	if (optind < argc) {
 		duration_secs = atof(argv[optind++]);
-		if (duration_secs < 0.5) {
-			fprintf(stderr, "Duration must 0.5 or more.\n");
-			eventstat_exit(EXIT_FAILURE);
-		}
+		if (duration_secs < 0.5)
+			err_abort("Duration must 0.5 or more.\n");
 	}
 
 	if (optind < argc) {
 		forever = false;
 		errno = 0;
 		count = (int64_t)strtoll(argv[optind++], NULL, 10);
-		if (errno) {
-			fprintf(stderr, "Invalid count value\n");
-			eventstat_exit(EXIT_FAILURE);
-		}
-		if (count < 1) {
-			fprintf(stderr, "Count must be > 0\n");
-			eventstat_exit(EXIT_FAILURE);
-		}
+		if (errno)
+			err_abort("Invalid count value\n");
+		if (count < 1)
+			err_abort("Count must be > 0\n");
 	}
 
 	opt_threshold *= duration_secs;
 
-	if (geteuid() != 0) {
-		fprintf(stderr, "%s requires root privileges to write to %s\n",
+	if (geteuid() != 0)
+		err_abort("%s requires root privileges to write to %s\n",
 			app_name, proc_timer_stats);
-		eventstat_exit(EXIT_FAILURE);
-	}
 
 	sane_procs = sane_proc_pid_info();
 	if (!sane_procs)
@@ -1526,21 +1531,15 @@ int main(int argc, char **argv)
 		sigemptyset(&new_action.sa_mask);
 		new_action.sa_flags = 0;
 
-		if (sigaction(signals[i], &new_action, NULL) < 0) {
-			fprintf(stderr, "sigaction failed: errno=%d (%s)\n",
+		if (sigaction(signals[i], &new_action, NULL) < 0)
+			err_abort("sigaction failed: errno=%d (%s)\n",
 				errno, strerror(errno));
-			eventstat_exit(EXIT_FAILURE);
-		}
 	}
 
-	if ((timer_stats_old = calloc(TABLE_SIZE, sizeof(timer_stat_t*))) == NULL) {
-		fprintf(stderr, "Cannot allocate old timer stats table\n");
-		eventstat_exit(EXIT_FAILURE);
-	}
-	if ((timer_stats_new = calloc(TABLE_SIZE, sizeof(timer_stat_t*))) == NULL) {
-		fprintf(stderr, "Cannot allocate old timer stats table\n");
-		eventstat_exit(EXIT_FAILURE);
-	}
+	if ((timer_stats_old = calloc(TABLE_SIZE, sizeof(timer_stat_t*))) == NULL)
+		err_abort("Cannot allocate old timer stats table\n");
+	if ((timer_stats_new = calloc(TABLE_SIZE, sizeof(timer_stat_t*))) == NULL)
+		err_abort("Cannot allocate old timer stats table\n");
 
 	/* Should really catch signals and set back to zero before we die */
 	set_timer_stat("1\n", true);
@@ -1561,6 +1560,7 @@ int main(int argc, char **argv)
 		nodelay(stdscr, 1);
 		keypad(stdscr, 1);
 		curs_set(0);
+		curses_init = true;
 	}
 
 	while (!stop_eventstat && (forever || count--)) {
@@ -1584,7 +1584,7 @@ int main(int argc, char **argv)
 		redo = false;
 		tv = double_to_timeval(secs);
 
-		if (opt_flags & OPT_TOP) {
+		if (curses_init) {
 			fd_set rfds;
 			int ch;
 
@@ -1611,8 +1611,7 @@ int main(int argc, char **argv)
 
 		if (ret < 0) {
 			if (errno != EINTR) {
-				if (opt_flags & OPT_TOP)
-					endwin();
+				eventstat_endwin();
 
 				fprintf(stderr, "select() failed: errno=%d (%s)\n",
 					errno, strerror(errno));
@@ -1627,9 +1626,7 @@ int main(int argc, char **argv)
 		time_delta = time_now - time_start;
 
 		get_events(timer_stats_new, time_now);
-		if (opt_flags & OPT_TOP) {
-			clear();
-		}
+		eventstat_clear();
 		timer_stat_diff(duration, time_delta, n_lines, time_now,
 			timer_stats_old, timer_stats_new);
 		if (opt_flags & OPT_TOP)
@@ -1642,8 +1639,7 @@ int main(int argc, char **argv)
 
 		timer_info_purge_old(time_now);
 	}
-	if (opt_flags & OPT_TOP)
-		endwin();
+	eventstat_endwin();
 abort:
 	samples_dump(csv_results);
 

@@ -1642,7 +1642,8 @@ int main(int argc, char **argv)
 
 		timer_info_purge_old(time_now);
 	}
-	endwin();
+	if (opt_flags & OPT_TOP)
+		endwin();
 abort:
 	samples_dump(csv_results);
 

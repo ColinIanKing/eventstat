@@ -57,7 +57,7 @@
 #define OPT_TOP			(0x00000800)
 
 #define EVENT_BUF_SIZE		(8192)
-#define TIMER_REAP_AGE		(600)		/* How old a timer is before we reap it */
+#define TIMER_REAP_AGE		(600)	/* Age of timer before it is reaped */
 #define TIMER_REAP_THRESHOLD	(30)
 
 #define _VER_(major, minor, patchlevel) \
@@ -66,7 +66,8 @@
 #if defined(__GNUC__) && defined(__GNUC_MINOR__)
 #if defined(__GNUC_PATCHLEVEL__)
 #define NEED_GNUC(major, minor, patchlevel) \
-	_VER_(major, minor, patchlevel) <= _VER_(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__)
+	_VER_(major, minor, patchlevel) <= \
+	_VER_(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__)
 #else
 #define NEED_GNUC(major, minor, patchlevel) \
 	_VER_(major, minor, patchlevel) <= _VER_(__GNUC__, __GNUC_MINOR__, 0)
@@ -92,7 +93,7 @@ typedef struct timer_info {
 	struct timer_info *hash_next;	/* Next in hash list */
 	pid_t		pid;
 	char 		*task;		/* Name of process/kernel task */
-	char 		*task_mangled;	/* Modified name of process/kernel task */
+	char 		*task_mangled;	/* Modified name of process/kernel */
 	char		*cmdline;	/* From /proc/$pid/cmdline */
 	char		*func;		/* Kernel waiting func */
 	char		*callback;	/* Kernel timer callback func */
@@ -410,7 +411,8 @@ static inline void samples_free(void)
 
 /*
  *  sample_add()
- *	add a timer_stat's delta and info field to a list at time position whence
+ *	add a timer_stat's delta and info field to a
+ *	list at time position whence
  */
 static void sample_add(
 	timer_stat_t *timer_stat,
@@ -455,7 +457,8 @@ static void sample_add(
 
 /*
  *  sample_find()
- *	scan through a sample_delta_list for timer info, return NULL if not found
+ *	scan through a sample_delta_list for timer info,
+ *	return NULL if not found
  */
 inline HOT static sample_delta_item_t *sample_find(
 	sample_delta_list_t *sdl,
@@ -521,7 +524,7 @@ static bool pid_a_kernel_thread_guess(const char *task)
 	size_t i;
 
 	for (i = 0; kernel_tasks[i].task != NULL; i++) {
-		if (strncmp(task, kernel_tasks[i].task, kernel_tasks[i].len) == 0)
+		if (!strncmp(task, kernel_tasks[i].task, kernel_tasks[i].len))
 			return true;
 	}
 	return false;
@@ -684,11 +687,12 @@ static void samples_dump(const char *filename)
 
 		/* Scan in timer info order to be consistent for all sdl rows */
 		for (i = 0; i < n; i++) {
-			sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
+			sample_delta_item_t *sdi =
+				sample_find(sdl, sorted_timer_infos[i]);
 			/*
-			 *  duration - if -C option is used then don't scale by the
-			 *  per sample duration time, instead give the raw sample count
-			 *  by scaling by 1.0 (i.e. no scaling).
+			 *  duration - if -C option is used then don't scale
+			 *  by the per sample duration time, instead give the
+			 *  raw sample count by scaling by 1.0 (i.e. no scaling)
 			 */
 			if (sdi) {
 				duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
@@ -710,11 +714,13 @@ static void samples_dump(const char *filename)
 			sample_delta_list_t *sdl;
 
 			for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
-				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
+				sample_delta_item_t *sdi =
+					sample_find(sdl, sorted_timer_infos[i]);
 
 				if (sdi) {
 					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
-					double val = (duration == 0.0) ? 0.0: sdi->delta / duration;
+					double val = (duration == 0.0) ?
+						0.0 : sdi->delta / duration;
 					if (min > val)
 						min = val;
 				}
@@ -729,11 +735,13 @@ static void samples_dump(const char *filename)
 			sample_delta_list_t *sdl;
 
 			for (sdl = sample_delta_list; sdl; sdl= sdl->next) {
-				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
+				sample_delta_item_t *sdi =
+					sample_find(sdl, sorted_timer_infos[i]);
 
 				if (sdi) {
 					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
-					double val = (duration == 0.0) ? 0.0: sdi->delta / duration;
+					double val = (duration == 0.0) ?
+						0.0 : sdi->delta / duration;
 					if (max < val)
 						max = val;
 				}
@@ -753,12 +761,14 @@ static void samples_dump(const char *filename)
 		 */
 		fprintf(fp, ",Std.Dev.:");
 		for (i = 0; i < n; i++) {
-			double average = (double)sorted_timer_infos[i]->total / (double)count;
+			double average = (double)
+				sorted_timer_infos[i]->total / (double)count;
 			double sum = 0.0;
 			sample_delta_list_t *sdl;
 
 			for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
-				sample_delta_item_t *sdi = sample_find(sdl, sorted_timer_infos[i]);
+				sample_delta_item_t *sdi =
+					sample_find(sdl, sorted_timer_infos[i]);
 				if (sdi) {
 					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
 					double diff = duration == 0.0 ? 0.0 :
@@ -1164,7 +1174,8 @@ static OPTIMIZE3 void timer_stat_diff(
 		int32_t j = 0;
 
 		es_printf("%8s %-5s %-15s",
-			(opt_flags & OPT_CUMULATIVE) ? "Events" : "Event/s", "PID", "Task");
+			(opt_flags & OPT_CUMULATIVE) ?
+				"Events" : "Event/s", "PID", "Task");
 		if (!(opt_flags & OPT_BRIEF))
 			es_printf(" %-25s %-s\n",
 				"Init Function", "Callback");
@@ -1172,10 +1183,12 @@ static OPTIMIZE3 void timer_stat_diff(
 			es_printf("\n");
 
 		while (sorted) {
-			if (((n_lines == -1) || (j < n_lines)) && (sorted->delta != 0)) {
+			if (((n_lines == -1) || (j < n_lines)) &&
+			    (sorted->delta != 0)) {
 				j++;
 				if (opt_flags & OPT_CUMULATIVE)
-					es_printf("%8" PRIu64 " ", sorted->count);
+					es_printf("%8" PRIu64 " ",
+						sorted->count);
 				else
 					es_printf("%8.2f ", (double)sorted->delta / duration);
 
@@ -1188,8 +1201,10 @@ static OPTIMIZE3 void timer_stat_diff(
 							cmd : sorted->info->task_mangled);
 				} else {
 					es_printf("%5d %-15s %-25s %-s\n",
-						sorted->info->pid, sorted->info->task_mangled,
-						sorted->info->func, sorted->info->callback);
+						sorted->info->pid,
+						sorted->info->task_mangled,
+						sorted->info->func,
+						sorted->info->callback);
 				}
 			}
 			total += sorted->delta;
@@ -1213,11 +1228,13 @@ static OPTIMIZE3 void timer_stat_diff(
 
 			if (*pos)
 				*pos = '\0';
-			es_printf("Timestamp: %s, Total Run Duration: %.1f secs\n", timestr, time_delta);
+			es_printf("Timestamp: %s, Total Run Duration: "
+				"%.1f secs\n", timestr, time_delta);
 		}
 
 		if (!sane_procs)
-			es_printf("Note: this was run inside a container, kernel tasks were guessed.\n");
+			es_printf("Note: this was run inside a container, "
+				"kernel tasks were guessed.\n");
 		es_printf("\n");
 	}
 }
@@ -1237,7 +1254,8 @@ static char *read_events(void)
 
 	if (get_events_buf == NULL) {
 		if ((get_events_buf = malloc(EVENT_BUF_SIZE << 1)) == NULL)
-			err_abort("Cannot read %s, out of memory\n", proc_timer_stats);
+			err_abort("Cannot read %s, out of memory\n",
+				proc_timer_stats);
 
 		get_events_size = (EVENT_BUF_SIZE << 1);
 	}
@@ -1268,7 +1286,8 @@ static char *read_events(void)
 			tmpptr = realloc(get_events_buf, get_events_size + 1);
 			if (!tmpptr) {
 				(void)close(fd);
-				err_abort("Cannot read %s, out of memory\n", proc_timer_stats);
+				err_abort("Cannot read %s, out of memory\n",
+					proc_timer_stats);
 			}
 			get_events_buf = tmpptr;
 		}
@@ -1338,7 +1357,8 @@ static void get_events(
 		memset(func, 0, sizeof(func));
 		memset(callback, 0, sizeof(callback));
 		info.pid = -1;
-		if (sscanf(ptr, "%10d %63s %63s (%63[^)])", &info.pid, task, func, callback) != 4)
+		if (sscanf(ptr, "%10d %63s %63s (%63[^)])",
+		    &info.pid, task, func, callback) != 4)
 			goto next;
 
 		/* Processes without a command line are kernel threads */
@@ -1457,7 +1477,8 @@ int main(int argc, char **argv)
 			errno = 0;
 			n_lines = (int32_t)strtol(optarg, NULL, 10);
 			if (errno)
-				err_abort("Invalid value for number of events to display\n");
+				err_abort("Invalid value for number "
+					"of events to display\n");
 			if (n_lines < 1)
 				err_abort("-n option must be greater than 0\n");
 			break;
@@ -1618,7 +1639,8 @@ int main(int argc, char **argv)
 			if (errno != EINTR) {
 				eventstat_endwin();
 
-				fprintf(stderr, "select() failed: errno=%d (%s)\n",
+				fprintf(stderr, "select() failed: "
+					"errno=%d (%s)\n",
 					errno, strerror(errno));
 				goto abort;
 			}

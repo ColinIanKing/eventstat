@@ -224,13 +224,35 @@ static HOT OPTIMIZE3 uint32_t hash_djb2a(const char *str)
 }
 
 /*
- *  eventstat_clear();
+ *  eventstat_clear()
  *  	clear screen if in top mode
  */
-static void eventstat_clear(void)
+static inline void eventstat_clear(void)
 {
 	if (curses_init)
 		clear();
+}
+
+/*
+ *  eventstat_refresh()
+ *	refresh screen if in top mode
+ */
+static inline void eventstat_refresh()
+{
+	if (curses_init)
+		refresh();
+}
+
+/*
+ *  eventstat_move()
+ * 	move cursor if in top mode
+ */
+static inline void eventstat_move(
+	const int y,
+	const int x)
+{
+	if (curses_init)
+		move(y, x);
 }
 
 /*
@@ -1209,15 +1231,13 @@ static OPTIMIZE3 void timer_stat_diff(
 
 			sorted = sorted->sorted_freq_next;
 		}
-		if (opt_flags & OPT_TOP)
-			move(LINES - 1, 0);
+		eventstat_move(LINES - 1, 0);
 		es_printf("%" PRIu64 " Total events, %5.2f events/sec "
 			"(kernel: %5.2f, userspace: %5.2f)\n",
 			total, (double)total / duration,
 			(double)kt_total / duration,
 			(double)(total - kt_total) / duration);
-		if ((opt_flags & OPT_SHOW_WHENCE) &&
-		    (!(opt_flags & OPT_TOP))) {
+		if ((opt_flags & OPT_SHOW_WHENCE) && !curses_init) {
 			time_t t = (time_t)whence;
 			char *timestr = ctime(&t);
 			char *pos = strchr(timestr, '\n');
@@ -1653,8 +1673,7 @@ int main(int argc, char **argv)
 		eventstat_clear();
 		timer_stat_diff(duration, time_delta, n_lines, time_now,
 			timer_stats_old, timer_stats_new);
-		if (opt_flags & OPT_TOP)
-			refresh();
+		eventstat_refresh();
 		timer_stat_free_contents(timer_stats_old);
 
 		tmp             = timer_stats_old;

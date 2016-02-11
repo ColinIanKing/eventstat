@@ -449,8 +449,7 @@ static void sample_add(
 		err_abort("Cannot allocate sample delta item\n");
 	sdi->delta = timer_stat->delta;
 	sdi->time_delta = timer_stat->time_delta;
-	sdi->info  = timer_stat->info;
-
+	sdi->info = timer_stat->info;
 	sdi->next = sdl->list;
 	sdl->list = sdi;
 }
@@ -832,11 +831,9 @@ static HOT timer_info_t *timer_info_find(
 	}
 
 	/* Does not exist in list, append it */
-
 	info->next = timer_info_list;
 	timer_info_list = info;
 	timer_info_list_length++;
-
 	info->hash_next = timer_info_hash[h];
 	timer_info_hash[h] = info;
 
@@ -1055,7 +1052,6 @@ static void timer_stat_add(
 	ts_new->next = timer_stats[h];
 	ts_new->time = time_now;
 	ts_new->sorted_freq_next = NULL;
-
 	timer_stats[h] = ts_new;
 }
 
@@ -1579,7 +1575,6 @@ int main(int argc, char **argv)
 		if (sigaction(SIGWINCH, &sa, NULL) < 0)
 			err_abort("sigaction failed: errno=%d (%s)\n",
 				errno, strerror(errno));
-
 		initscr();
 		cbreak();
 		noecho();

@@ -1,3 +1,13 @@
+eventstat (0.03.00-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * reduce scope of buf in es_printf
+  * Fix spacing in cumulative mode, missing space after count and before pid
+  * Add 'T' option, 'top' mode
+  * Update copyright year to 2016
+
+ -- Colin King <colin.king@canonical.com>  Thu, 11 Feb 2016 01:12:34 +0000
+
 eventstat (0.02.02-1) unstable; urgency=medium
 
   * fix segfault when removing stale timer stats (LP: #1496900)

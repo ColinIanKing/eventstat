@@ -1148,7 +1148,7 @@ static OPTIMIZE3 void timer_stat_diff(
 			if (((n_lines == -1) || (j < n_lines)) && (sorted->delta != 0)) {
 				j++;
 				if (opt_flags & OPT_CUMULATIVE)
-					es_printf("%8" PRIu64, sorted->count);
+					es_printf("%8" PRIu64 " ", sorted->count);
 				else
 					es_printf("%8.2f ", (double)sorted->delta / duration);
 

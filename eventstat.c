@@ -1075,10 +1075,11 @@ static void timer_stat_sort_freq_add(
 static void es_printf(const char *fmt, ...)
 {
 	va_list ap;
-	char buf[256];
 
 	va_start(ap, fmt);
 	if (opt_flags & OPT_TOP) {
+		char buf[256];
+
 		vsnprintf(buf, sizeof(buf), fmt, ap);
 		printw("%s", buf);
 	} else {

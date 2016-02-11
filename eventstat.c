@@ -52,9 +52,9 @@
 #define OPT_BRIEF		(0x00000080)
 #define OPT_KERNEL		(0x00000100)
 #define OPT_USER		(0x00000200)
-#define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
 #define OPT_SHOW_WHENCE		(0x00000400)
 #define OPT_TOP			(0x00000800)
+#define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
 
 #define EVENT_BUF_SIZE		(8192)
 #define TIMER_REAP_AGE		(600)	/* Age of timer before it is reaped */
@@ -1242,6 +1242,11 @@ static OPTIMIZE3 void timer_stat_diff(
 		while (sorted) {
 			if (((n_lines == -1) || (j < n_lines)) &&
 			    (sorted->delta != 0)) {
+				char *task = (opt_flags & OPT_CMD) ?
+					sorted->info->cmdline : sorted->info->task_mangled;
+				if (!*task)
+					task = sorted->info->task_mangled;
+
 				j++;
 				if (opt_flags & OPT_CUMULATIVE)
 					es_printf("%8" PRIu64 " ",
@@ -1250,16 +1255,13 @@ static OPTIMIZE3 void timer_stat_diff(
 					es_printf("%8.2f ", (double)sorted->delta / duration);
 
 				if (opt_flags & OPT_BRIEF) {
-					char *cmd = sorted->info->cmdline;
 
 					es_printf("%5d %s\n",
-						sorted->info->pid,
-						(opt_flags & OPT_CMD) ?
-							cmd : sorted->info->task_mangled);
+						sorted->info->pid, task);
 				} else {
 					es_printf("%5d %-*.*s %-*.*s %-*.*s\n",
 						sorted->info->pid,
-						ta_size, ta_size, sorted->info->task_mangled,
+						ta_size, ta_size, task,
 						if_size, if_size, sorted->info->func,
 						cb_size, cb_size, sorted->info->callback);
 				}
@@ -1475,12 +1477,12 @@ static void show_usage(void)
 		"  -C\t\treport event count rather than event per second in CSV output.\n"
 		"  -d\t\tremove pathname from long process name in CSV output.\n"
 		"  -h\t\tprint this help.\n"
-		"  -l\t\tuse long cmdline text from /proc/pid/cmdline in CSV output.\n"
+		"  -l\t\tuse long cmdline text from /proc/pid/cmdline for process name.\n"
 		"  -n events\tspecifies number of events to display.\n"
 		"  -q\t\trun quietly, useful with option -r.\n"
 		"  -r filename\tspecifies a comma separated values (CSV) output file\n"
 		"\t\tto dump samples into.\n"
-		"  -s\t\tuse short process name from /proc/pid/cmdline in CSV output.\n"
+		"  -s\t\tuse short process name from /proc/pid/cmdline for process name.\n"
 		"  -S\t\tcalculate min, max, average and standard deviation in CSV\n"
 		"\t\toutput.\n"
 		"  -t threshold\tsamples less than the specified threshold are ignored.\n"

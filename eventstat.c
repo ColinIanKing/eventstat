@@ -1103,7 +1103,7 @@ static void es_printf(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	if (opt_flags & OPT_TOP) {
+	if (curses_init) {
 		char buf[256];
 
 		vsnprintf(buf, sizeof(buf), fmt, ap);

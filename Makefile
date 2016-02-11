@@ -24,7 +24,7 @@ BINDIR=/usr/bin
 MANDIR=/usr/share/man/man8
 
 eventstat: eventstat.o
-	$(CC) $(CFLAGS) $< -lm -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $< -lm -lncurses -o $@ $(LDFLAGS)
 
 eventstat.8.gz: eventstat.8
 	gzip -c $< > $@

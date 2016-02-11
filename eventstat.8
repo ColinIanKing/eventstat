@@ -2,7 +2,7 @@
 .\" First parameter, NAME, should be all caps
 .\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
 .\" other parameters are allowed: see man(7), man(1)
-.TH EVENTSTAT 8 "May 18, 2015"
+.TH EVENTSTAT 8 "February 11, 2016"
 .\" Please adjust this date whenever revising the manpage.
 .\"
 .\" Some roff macros, for reference:
@@ -77,6 +77,9 @@ at the end of the CSV output.
 .B \-t threshold
 ignore samples where the event delta per second less than the given threshold.
 .TP
+.B \-T
+enable 'top' mode, refresh display on each update.
+.TP
 .B \-u
 report just user space processes.
 .TP
@@ -122,7 +125,8 @@ The fourth row lists the total number of wakeup events for each task during the 
 The subsequent rows list the average number of wakeups per second measured during the sample interval for each 
 task in column two onwards. The first column indicates the sample time (in seconds) since the start of the measuring.
 .SH SEE ALSO
-.BR powertop (8) 
+.BR powertop (8),
+.BR top (1)
 .SH AUTHOR
 eventstat was written by Colin King <colin.king@canonical.com>
 .PP

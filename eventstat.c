@@ -31,12 +31,14 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <limits.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
 #include <math.h>
 #include <float.h>
+#include <ncurses.h>
 
 #define TABLE_SIZE		(1009)		/* Should be a prime */
 
@@ -52,6 +54,7 @@
 #define OPT_USER		(0x00000200)
 #define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
 #define OPT_SHOW_WHENCE		(0x00000400)
+#define OPT_TOP			(0x00000800)
 
 #define EVENT_BUF_SIZE		(8192)
 #define TIMER_REAP_AGE		(600)		/* How old a timer is before we reap it */
@@ -147,6 +150,7 @@ static double  opt_threshold;		/* ignore samples with event delta less than this
 static uint32_t opt_flags;		/* option flags */
 static bool sane_procs;			/* false if we are in a container */
 static char *get_events_buf;		/* buffer to glob events into */
+static bool resized;			/* window resized */
 
 /*
  *  Attempt to catch a range of signals so
@@ -1064,6 +1068,26 @@ static void timer_stat_sort_freq_add(
 }
 
 /*
+ *  es_printf()
+ *	eventstat printf - print to stdout or ncurses
+ *	print depending on the mode
+ */
+static void es_printf(const char *fmt, ...)
+{
+	va_list ap;
+	char buf[256];
+
+	va_start(ap, fmt);
+	if (opt_flags & OPT_TOP) {
+		vsnprintf(buf, sizeof(buf), fmt, ap);
+		printw("%s", buf);
+	} else {
+		vprintf(fmt, ap);
+	}
+	va_end(ap);
+}
+
+/*
  *  timer_stat_diff()
  *	find difference in event count between to hash table samples of timer
  *	stats.  We are interested in just current and new timers, not ones that
@@ -1112,31 +1136,31 @@ static OPTIMIZE3 void timer_stat_diff(
 		uint64_t total = 0UL, kt_total = 0UL;
 		int32_t j = 0;
 
-		printf("%8s %-5s %-15s",
+		es_printf("%8s %-5s %-15s",
 			(opt_flags & OPT_CUMULATIVE) ? "Events" : "Event/s", "PID", "Task");
 		if (!(opt_flags & OPT_BRIEF))
-			printf(" %-25s %-s\n",
+			es_printf(" %-25s %-s\n",
 				"Init Function", "Callback");
 		else
-			printf("\n");
+			es_printf("\n");
 
 		while (sorted) {
 			if (((n_lines == -1) || (j < n_lines)) && (sorted->delta != 0)) {
 				j++;
 				if (opt_flags & OPT_CUMULATIVE)
-					printf("%8" PRIu64, sorted->count);
+					es_printf("%8" PRIu64, sorted->count);
 				else
-					printf("%8.2f ", (double)sorted->delta / duration);
+					es_printf("%8.2f ", (double)sorted->delta / duration);
 
 				if (opt_flags & OPT_BRIEF) {
 					char *cmd = sorted->info->cmdline;
 
-					printf("%5d %s\n",
+					es_printf("%5d %s\n",
 						sorted->info->pid,
 						(opt_flags & OPT_CMD) ?
 							cmd : sorted->info->task_mangled);
 				} else {
-					printf("%5d %-15s %-25s %-s\n",
+					es_printf("%5d %-15s %-25s %-s\n",
 						sorted->info->pid, sorted->info->task_mangled,
 						sorted->info->func, sorted->info->callback);
 				}
@@ -1147,24 +1171,27 @@ static OPTIMIZE3 void timer_stat_diff(
 
 			sorted = sorted->sorted_freq_next;
 		}
-		printf("%" PRIu64 " Total events, %5.2f events/sec "
+		if (opt_flags & OPT_TOP)
+			move(LINES - 1, 0);
+		es_printf("%" PRIu64 " Total events, %5.2f events/sec "
 			"(kernel: %5.2f, userspace: %5.2f)\n",
 			total, (double)total / duration,
 			(double)kt_total / duration,
 			(double)(total - kt_total) / duration);
-		if (opt_flags & OPT_SHOW_WHENCE) {
+		if ((opt_flags & OPT_SHOW_WHENCE) &&
+		    (!(opt_flags & OPT_TOP))) {
 			time_t t = (time_t)whence;
 			char *timestr = ctime(&t);
 			char *pos = strchr(timestr, '\n');
 
 			if (*pos)
 				*pos = '\0';
-			printf("Timestamp: %s, Total Run Duration: %.1f secs\n", timestr, time_delta);
+			es_printf("Timestamp: %s, Total Run Duration: %.1f secs\n", timestr, time_delta);
 		}
 
 		if (!sane_procs)
-			printf("Note: this was run inside a container, kernel tasks were guessed.\n");
-		printf("\n");
+			es_printf("Note: this was run inside a container, kernel tasks were guessed.\n");
+		es_printf("\n");
 	}
 }
 
@@ -1357,7 +1384,19 @@ static void show_usage(void)
 	printf("  -s\t\tuse short process name from /proc/pid/cmdline in CSV output.\n");
 	printf("  -S\t\tcalculate min, max, average and standard deviation in CSV output.\n");
 	printf("  -t threshold\tsamples less than the specified threshold are ignored.\n");
+	printf("  -T\t\tenable \'top\' mode rather than a scrolling output.\n");
 	printf("  -w\t\tadd time stamp (when events occurred) to output.\n");
+}
+
+/*
+ *  handle_sigwinch()
+ *	flag window resize on SIGWINCH
+ */
+static void handle_sigwinch(int sig)
+{
+	(void)sig;
+
+	resized = true;
 }
 
 int main(int argc, char **argv)
@@ -1367,11 +1406,12 @@ int main(int argc, char **argv)
 	int64_t count = 1, t = 1;
 	int32_t n_lines = -1;
 	bool forever = true;
+	bool redo = false;
 	struct sigaction new_action;
 	int i;
 
 	for (;;) {
-		int c = getopt(argc, argv, "bcCdksSlhn:qr:t:uw");
+		int c = getopt(argc, argv, "bcCdksSlhn:qr:t:Tuw");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -1408,6 +1448,9 @@ int main(int argc, char **argv)
 				fprintf(stderr, "-t threshold must be 1 or more.\n");
 				eventstat_exit(EXIT_FAILURE);
 			}
+			break;
+		case 'T':
+			opt_flags |= OPT_TOP;
 			break;
 		case 'q':
 			opt_flags |= OPT_QUIET;
@@ -1504,6 +1547,21 @@ int main(int argc, char **argv)
 
 	get_events(timer_stats_old, time_now);
 
+	if (opt_flags & OPT_TOP) {
+		struct sigaction sa;
+
+		memset(&sa, 0, sizeof(sa));
+		sa.sa_handler = handle_sigwinch;
+		sigaction(SIGWINCH, &sa, NULL);
+
+		initscr();
+		cbreak();
+		noecho();
+		nodelay(stdscr, 1);
+		keypad(stdscr, 1);
+		curs_set(0);
+	}
+
 	while (!stop_eventstat && (forever || count--)) {
 		struct timeval tv;
 		double secs, duration, time_delta;
@@ -1519,28 +1577,62 @@ int main(int argc, char **argv)
 			if (secs < 0.0)
 				secs = 0.0;
 		} else {
-			t++;
+			if (!redo)
+				t++;
 		}
+		redo = false;
 		tv = double_to_timeval(secs);
-		ret = select(0, NULL, NULL, NULL, &tv);
+
+		if (opt_flags & OPT_TOP) {
+			fd_set rfds;
+			int ch;
+
+			FD_ZERO(&rfds);
+			FD_SET(fileno(stdin), &rfds);
+
+			ret = select(fileno(stdin) + 1, &rfds, NULL, NULL, &tv);
+			ch = getch();
+			if ((ch == 27) || (ch == 'q'))
+				break;
+			if (resized) {
+				struct winsize ws;
+				if (ioctl(fileno(stdin), TIOCGWINSZ, &ws) != -1) {
+					resizeterm(ws.ws_row, ws.ws_col);
+					refresh();
+				}
+				resized = false;
+			}
+			if (ret > 0)
+				redo = true;
+		} else {
+			ret = select(0, NULL, NULL, NULL, &tv);
+		}
+
 		if (ret < 0) {
-			if (errno == EINTR) {
-				goto abort;
-			} else {
+			if (errno != EINTR) {
+				if (opt_flags & OPT_TOP)
+					endwin();
+
 				fprintf(stderr, "select() failed: errno=%d (%s)\n",
 					errno, strerror(errno));
-				break;
+				goto abort;
 			}
+			redo = true;
 		}
 
 		duration = gettime_to_double() - time_now;
-		duration = floor((duration * 100.0) + 0.5) / 100.0;
+		duration = floor((duration * 1000.0) + 0.5) / 1000.0;
 		time_now = gettime_to_double();
 		time_delta = time_now - time_start;
 
 		get_events(timer_stats_new, time_now);
+		if (opt_flags & OPT_TOP) {
+			clear();
+		}
 		timer_stat_diff(duration, time_delta, n_lines, time_now,
 			timer_stats_old, timer_stats_new);
+		if (opt_flags & OPT_TOP)
+			refresh();
 		timer_stat_free_contents(timer_stats_old);
 
 		tmp             = timer_stats_old;
@@ -1549,6 +1641,7 @@ int main(int argc, char **argv)
 
 		timer_info_purge_old(time_now);
 	}
+	endwin();
 abort:
 	samples_dump(csv_results);
 

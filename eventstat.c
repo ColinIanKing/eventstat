@@ -59,6 +59,8 @@
 #define EVENT_BUF_SIZE		(8192)
 #define TIMER_REAP_AGE		(600)	/* Age of timer before it is reaped */
 #define TIMER_REAP_THRESHOLD	(30)
+#define TASK_WIDTH		(15)
+#define FUNC_WIDTH		(25)
 
 #define _VER_(major, minor, patchlevel) \
 	((major * 10000) + (minor * 100) + patchlevel)
@@ -153,6 +155,8 @@ static volatile bool stop_eventstat = false;	/* set by sighandler */
 static bool sane_procs;			/* false if we are in a container */
 static bool resized;			/* window resized */
 static bool curses_init;		/* curses initialised */
+static int rows = 25;			/* tty size, rows */
+static int cols = 80;			/* tty size, columns */
 
 /*
  *  Attempt to catch a range of signals so
@@ -222,6 +226,21 @@ static HOT OPTIMIZE3 uint32_t hash_djb2a(const char *str)
 	}
 	return hash % TABLE_SIZE;
 }
+
+/*
+ *  eventstat_winsize()
+ *	get tty size
+ */
+static void eventstat_winsize()
+{
+	struct winsize ws;
+
+	if (ioctl(fileno(stdin), TIOCGWINSZ, &ws) != -1) {
+		rows = ws.ws_row;
+		cols = ws.ws_col;
+	}
+}
+
 
 /*
  *  eventstat_clear()
@@ -1190,13 +1209,33 @@ static OPTIMIZE3 void timer_stat_diff(
 	if (!(opt_flags & OPT_QUIET)) {
 		uint64_t total = 0UL, kt_total = 0UL;
 		int32_t j = 0;
+		int sz, ta_size, if_size, cb_size;
 
-		es_printf("%8s %-5s %-15s",
+		eventstat_winsize();
+		if (resized && curses_init) {
+			resizeterm(rows, cols);
+			refresh();
+			resized = false;
+		}
+
+		sz = (cols - 80) / 6;
+		if (sz < 0)
+			sz = 0;
+
+		ta_size = TASK_WIDTH + sz;
+		if_size = FUNC_WIDTH + (3 * sz);
+		cb_size = cols - (8 + 1 + 5 + 1 + ta_size + 1 + if_size + 2);
+		if (cb_size < 0)
+			cb_size = 20;
+
+		es_printf("%8s %-5s %-*.*s",
 			(opt_flags & OPT_CUMULATIVE) ?
-				"Events" : "Event/s", "PID", "Task");
+				"Events" : "Event/s", "PID",
+				ta_size, ta_size, "Task");
 		if (!(opt_flags & OPT_BRIEF))
-			es_printf(" %-25s %-s\n",
-				"Init Function", "Callback");
+			es_printf(" %-*.*s %-*.*s\n",
+				if_size, if_size, "Init Function",
+				cb_size, cb_size, "Callback");
 		else
 			es_printf("\n");
 
@@ -1218,11 +1257,11 @@ static OPTIMIZE3 void timer_stat_diff(
 						(opt_flags & OPT_CMD) ?
 							cmd : sorted->info->task_mangled);
 				} else {
-					es_printf("%5d %-15s %-25s %-s\n",
+					es_printf("%5d %-*.*s %-*.*s %-*.*s\n",
 						sorted->info->pid,
-						sorted->info->task_mangled,
-						sorted->info->func,
-						sorted->info->callback);
+						ta_size, ta_size, sorted->info->task_mangled,
+						if_size, if_size, sorted->info->func,
+						cb_size, cb_size, sorted->info->callback);
 				}
 			}
 			total += sorted->delta;
@@ -1457,6 +1496,8 @@ static void handle_sigwinch(int sig)
 {
 	(void)sig;
 
+	eventstat_winsize();
+
 	resized = true;
 }
 
@@ -1638,14 +1679,6 @@ int main(int argc, char **argv)
 			ch = getch();
 			if ((ch == 27) || (ch == 'q'))
 				break;
-			if (resized) {
-				struct winsize ws;
-				if (ioctl(fileno(stdin), TIOCGWINSZ, &ws) != -1) {
-					resizeterm(ws.ws_row, ws.ws_col);
-					refresh();
-				}
-				resized = false;
-			}
 			if (ret > 0)
 				redo = true;
 		} else {

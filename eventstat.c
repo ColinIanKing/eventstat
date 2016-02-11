@@ -142,15 +142,15 @@ static const char *proc_timer_stats = "/proc/timer_stats";
 
 static timer_stat_t *timer_stat_free_list; /* free list of timer stats */
 static timer_info_t *timer_info_list;	/* cache list of timer_info */
-static uint32_t timer_info_list_length;	/* length of timer_info_list */
 static timer_info_t *timer_info_hash[TABLE_SIZE]; /* hash of timer_info */
 static sample_delta_list_t *sample_delta_list;	/* list of samples, sorted in sample time order */
 static char *csv_results;		/* results in comma separated values */
-static volatile bool stop_eventstat = false;	/* set by sighandler */
-static double  opt_threshold;		/* ignore samples with event delta less than this */
-static uint32_t opt_flags;		/* option flags */
-static bool sane_procs;			/* false if we are in a container */
 static char *get_events_buf;		/* buffer to glob events into */
+static double  opt_threshold;		/* ignore samples with event delta less than this */
+static uint32_t timer_info_list_length;	/* length of timer_info_list */
+static uint32_t opt_flags;		/* option flags */
+static volatile bool stop_eventstat = false;	/* set by sighandler */
+static bool sane_procs;			/* false if we are in a container */
 static bool resized;			/* window resized */
 static bool curses_init;		/* curses initialised */
 

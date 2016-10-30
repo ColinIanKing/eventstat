@@ -91,6 +91,9 @@
 #define OPTIMIZE3
 #endif
 
+#define FLOAT_TINY		(0.0000001)
+#define FLOAT_CMP(a, b)		((a - b) < FLOAT_TINY)
+
 typedef struct timer_info {
 	struct timer_info *next;	/* Next in list */
 	struct timer_info *hash_next;	/* Next in hash list */
@@ -470,7 +473,7 @@ static void sample_add(
 		return;
 
 	for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
-		if (sdl->whence == whence) {
+		if (FLOAT_CMP(sdl->whence, whence)) {
 			found = true;
 			break;
 		}
@@ -739,7 +742,7 @@ static void samples_dump(const char *filename)
 			 */
 			if (sdi) {
 				duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
-				fprintf(fp, ",%f", duration == 0.0 ? 0.0 :
+				fprintf(fp, ",%f", FLOAT_CMP(duration, 0.0) ? 0.0 :
 					(double)sdi->delta / duration);
 			} else
 				fprintf(fp, ",%f", 0.0);
@@ -762,7 +765,7 @@ static void samples_dump(const char *filename)
 
 				if (sdi) {
 					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
-					double val = (duration == 0.0) ?
+					double val = FLOAT_CMP(duration, 0.0) ?
 						0.0 : sdi->delta / duration;
 					if (min > val)
 						min = val;
@@ -783,7 +786,7 @@ static void samples_dump(const char *filename)
 
 				if (sdi) {
 					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
-					double val = (duration == 0.0) ?
+					double val = FLOAT_CMP(duration, 0.0) ?
 						0.0 : sdi->delta / duration;
 					if (max < val)
 						max = val;
@@ -814,7 +817,7 @@ static void samples_dump(const char *filename)
 					sample_find(sdl, sorted_timer_infos[i]);
 				if (sdi) {
 					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
-					double diff = duration == 0.0 ? 0.0 :
+					double diff = FLOAT_CMP(duration, 0.0) ? 0.0 :
 						((double)sdi->delta - average) / duration;
 					diff = diff * diff;
 					sum += diff;

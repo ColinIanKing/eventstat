@@ -92,7 +92,7 @@
 #endif
 
 #define FLOAT_TINY		(0.0000001)
-#define FLOAT_CMP(a, b)		((a - b) < FLOAT_TINY)
+#define FLOAT_CMP(a, b)		(fabs(a - b) < FLOAT_TINY)
 
 typedef struct timer_info {
 	struct timer_info *next;	/* Next in list */

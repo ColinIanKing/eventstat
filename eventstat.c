@@ -142,6 +142,8 @@ typedef struct {
 static const char *app_name = "eventstat";
 static const char *proc_timer_stats = "/proc/timer_stats";
 
+static void es_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
 static timer_stat_t *timer_stat_free_list; /* free list of timer stats */
 static timer_info_t *timer_info_list;	/* cache list of timer_info */
 static timer_info_t *timer_info_hash[TABLE_SIZE]; /* hash of timer_info */

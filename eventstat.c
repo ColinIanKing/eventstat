@@ -667,7 +667,6 @@ static void samples_dump(const char *filename)
 	FILE *fp;
 	uint64_t count = 0;
 	double first_time = -1.0;
-	double duration;
 	timer_info_t *info;
 	sample_delta_list_t *sdl;
 
@@ -741,7 +740,7 @@ static void samples_dump(const char *filename)
 			 *  raw sample count by scaling by 1.0 (i.e. no scaling)
 			 */
 			if (sdi) {
-				duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+				double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
 				fprintf(fp, ",%f", FLOAT_CMP(duration, 0.0) ? 0.0 :
 					(double)sdi->delta / duration);
 			} else

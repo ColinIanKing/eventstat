@@ -756,7 +756,6 @@ static void samples_dump(const char *filename)
 		fprintf(fp, ",Min:");
 		for (i = 0; i < n; i++) {
 			double min = DBL_MAX;
-			sample_delta_list_t *sdl;
 
 			for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
 				sample_delta_item_t *sdi =
@@ -777,7 +776,6 @@ static void samples_dump(const char *filename)
 		fprintf(fp, ",Max:");
 		for (i = 0; i < n; i++) {
 			double max = DBL_MIN;
-			sample_delta_list_t *sdl;
 
 			for (sdl = sample_delta_list; sdl; sdl= sdl->next) {
 				sample_delta_item_t *sdi =
@@ -809,7 +807,6 @@ static void samples_dump(const char *filename)
 			double average = (double)
 				sorted_timer_infos[i]->total / (double)count;
 			double sum = 0.0;
-			sample_delta_list_t *sdl;
 
 			for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
 				sample_delta_item_t *sdi =

@@ -1,3 +1,17 @@
+eventstat (0.03.03-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Fix FLOAT_CMP macro - need fabs on result
+  * Remove sdl declarations to fix sdl shadowing
+  * constify info1, info2
+  * Move scope of duration, removes shadowing of this variable
+  * Allow floating point comparisons a little bit of tiny slop
+  * Add stdarg.h header
+  * use gnu printf style attributes for es_printf
+  * Makefile: add PEDANTIC flags
+
+ -- Colin King <colin.king@canonical.com>  Wed, 2 Nov 2016 09:12:11 +0100
+
 eventstat (0.03.02-1) unstable; urgency=medium
 
   * Makefile: bump version

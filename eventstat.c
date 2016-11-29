@@ -229,6 +229,7 @@ static HOT OPTIMIZE3 uint32_t hash_djb2a(const char *str)
 	while ((c = *str++)) {
 		/* (hash * 33) ^ c */
 		hash = ((hash << 5) + hash) ^ c;
+		hash = (hash * 33) ^ c;
 	}
 	return hash % TABLE_SIZE;
 }
@@ -237,7 +238,7 @@ static HOT OPTIMIZE3 uint32_t hash_djb2a(const char *str)
  *  eventstat_winsize()
  *	get tty size
  */
-static void eventstat_winsize()
+static void eventstat_winsize(void)
 {
 	struct winsize ws;
 
@@ -262,7 +263,7 @@ static inline void eventstat_clear(void)
  *  eventstat_refresh()
  *	refresh screen if in top mode
  */
-static inline void eventstat_refresh()
+static inline void eventstat_refresh(void)
 {
 	if (curses_init)
 		refresh();

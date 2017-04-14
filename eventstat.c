@@ -333,7 +333,8 @@ static void eventstat_endwin(void)
  *  err_abort()
  *	print an error and exit
  */
-static void __attribute__ ((noreturn)) err_abort(const char *fmt, ...)
+static void __attribute__ ((noreturn)) __attribute__((format(printf, 1, 2)))
+err_abort(const char *fmt, ...)
 {
 	va_list ap;
 

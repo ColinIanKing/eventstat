@@ -218,6 +218,42 @@ static const int signals[] = {
 };
 
 /*
+ *  pid_max_digits()
+ *	determine (or guess) maximum digits of pids
+ */
+static int pid_max_digits(void)
+{
+	static int max_digits;
+	ssize_t n;
+	int fd;
+	const int default_digits = 6;
+	const int min_digits = 5;
+	char buf[32];
+
+	if (max_digits)
+		goto ret;
+
+	max_digits = default_digits;
+	fd = open("/proc/sys/kernel/pid_max", O_RDONLY);
+	if (fd < 0)
+		goto ret;
+	n = read(fd, buf, sizeof(buf) - 1);
+	(void)close(fd);
+	if (n < 0)
+		goto ret;
+
+	buf[n] = '\0';
+	max_digits = 0;
+	while (buf[max_digits] >= '0' && buf[max_digits] <= '9')
+		max_digits++;
+	if (max_digits < min_digits)
+		max_digits = min_digits;
+ret:
+	return max_digits;
+
+}
+
+/*
  *  hash_djb2a()
  *	Hash a string, from Dan Bernstein comp.lang.c (xor version)
  */
@@ -1212,6 +1248,7 @@ static OPTIMIZE3 void timer_stat_diff(
 	if (!(opt_flags & OPT_QUIET)) {
 		uint64_t total = 0UL, kt_total = 0UL;
 		int32_t j = 0;
+		const int pid_size = pid_max_digits();
 		int sz, ta_size, if_size, cb_size;
 
 		eventstat_winsize();
@@ -1227,13 +1264,14 @@ static OPTIMIZE3 void timer_stat_diff(
 
 		ta_size = TASK_WIDTH + sz;
 		if_size = FUNC_WIDTH + (3 * sz);
-		cb_size = cols - (8 + 1 + 5 + 1 + ta_size + 1 + if_size + 2);
+		cb_size = cols - (8 + 1 + pid_size + 1 + ta_size + 1 + if_size + 2);
 		if (cb_size < 0)
 			cb_size = 20;
 
-		es_printf("%8s %-5s %-*.*s",
+		es_printf("%8s %-*.*s %-*.*s",
 			(opt_flags & OPT_CUMULATIVE) ?
-				"Events" : "Event/s", "PID",
+				"Events" : "Event/s",
+				pid_size, pid_size, "PID",
 				ta_size, ta_size, "Task");
 		if (!(opt_flags & OPT_BRIEF))
 			es_printf(" %-*.*s %-*.*s\n",
@@ -1259,11 +1297,11 @@ static OPTIMIZE3 void timer_stat_diff(
 
 				if (opt_flags & OPT_BRIEF) {
 
-					es_printf("%5d %s\n",
-						sorted->info->pid, task);
+					es_printf("%*d %s\n",
+						pid_size, sorted->info->pid, task);
 				} else {
-					es_printf("%5d %-*.*s %-*.*s %-*.*s\n",
-						sorted->info->pid,
+					es_printf("%*d %-*.*s %-*.*s %-*.*s\n",
+						pid_size, sorted->info->pid,
 						ta_size, ta_size, task,
 						if_size, if_size, sorted->info->func,
 						cb_size, cb_size, sorted->info->callback);

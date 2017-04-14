@@ -42,7 +42,8 @@ eventstat.8.gz: eventstat.8
 dist:
 	rm -rf eventstat-$(VERSION)
 	mkdir eventstat-$(VERSION)
-	cp -rp Makefile eventstat.c eventstat.8 COPYING eventstat-$(VERSION)
+	cp -rp Makefile eventstat.c eventstat.8 COPYING snapcraft \
+		eventstat-$(VERSION)
 	tar -zcf eventstat-$(VERSION).tar.gz eventstat-$(VERSION)
 	rm -rf eventstat-$(VERSION)
 

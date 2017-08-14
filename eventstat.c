@@ -783,7 +783,7 @@ static void samples_dump(const char *filename)
 
 		if (first_time < 0)
 			first_time = sdl->whence;
-		fprintf(fp, ",%f (%f)", duration_round(sdl->whence - first_time), sdl->whence);
+		fprintf(fp, ",%f", duration_round(sdl->whence - first_time));
 
 		/* Scan in timer info order to be consistent for all sdl rows */
 		for (i = 0; i < n; i++) {

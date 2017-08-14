@@ -772,7 +772,7 @@ static void samples_dump(const char *filename)
 		fprintf(fp, ",%" PRIu64, sorted_timer_infos[i]->total_events);
 	fprintf(fp, "\n");
 
-	for (sdl = sample_delta_list; sdl; sdl= sdl->next) {
+	for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
 		time_t t = (time_t)sdl->whence;
 		struct tm *tm;
 
@@ -796,7 +796,7 @@ static void samples_dump(const char *filename)
 			 */
 			if (sdi) {
 				double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
-				fprintf(fp, ",%f", FLOAT_CMP(duration, 0.0) ? 0.0 :
+				fprintf(fp, ",%f", FLOAT_CMP(duration, 0.0) ? -99.99 :
 					(double)sdi->delta_events / duration);
 			} else
 				fprintf(fp, ",%f", 0.0);
@@ -816,7 +816,8 @@ static void samples_dump(const char *filename)
 static HOT timer_info_t *timer_info_find(
 	const timer_info_t *new_info,
 	const char *ident,
-	const double time_now)
+	const double time_now,
+	const double duration)
 {
 	timer_info_t *info;
 	const uint32_t h = hash_djb2a(ident);
@@ -841,7 +842,7 @@ static HOT timer_info_t *timer_info_find(
 	info->total_events = new_info->total_events;
 	info->delta_events = new_info->delta_events;
 	info->time_total = new_info->time_total;
-	info->prev_used = time_now;
+	info->prev_used = time_now - duration;		/* Fake previous time */
 	info->last_used = time_now;
 
 	if (info->task == NULL ||
@@ -1038,8 +1039,9 @@ static void timer_stat_free_contents(
  */
 static void timer_stat_add(
 	timer_stat_t *timer_stats[],	/* timer stat hash table */
+	timer_info_t *info,		/* timer info to be added */
 	const double time_now,		/* time sample was taken */
-	timer_info_t *info)		/* timer info to be added */
+	const double duration)		/* duration of a sample */
 {
 	const char *ident = make_hash_ident(info);
 	const uint32_t h = hash_djb2a(ident);
@@ -1064,7 +1066,7 @@ static void timer_stat_add(
 			err_abort("Out of memory allocating a timer stat\n");
 	}
 
-	ts_new->info = timer_info_find(info, ident, time_now);
+	ts_new->info = timer_info_find(info, ident, time_now, duration);
 	ts_new->next = timer_stats[h];
 	ts_new->sorted_freq_next = NULL;
 
@@ -1322,7 +1324,7 @@ static void get_events(
 	double duration)
 {
 	const size_t app_name_len = strlen(app_name);
-	const double time_end = time_now + duration;
+	const double time_end = time_now + duration - 0.05;
 	char *tmpptr = read_events(time_end);
 
 	if (!tmpptr)
@@ -1411,7 +1413,7 @@ static void get_events(
 			info.time_total = 0.0;
 			info.total_events = 1;
 			info.ident = make_hash_ident(&info);
-			timer_stat_add(timer_stats, time_now, &info);
+			timer_stat_add(timer_stats, &info, time_now, duration);
 		}
 free_next:
 		free(cmdline);

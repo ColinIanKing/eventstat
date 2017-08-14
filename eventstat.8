@@ -2,7 +2,7 @@
 .\" First parameter, NAME, should be all caps
 .\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
 .\" other parameters are allowed: see man(7), man(1)
-.TH EVENTSTAT 8 "February 11, 2016"
+.TH EVENTSTAT 8 "August 14, 2018"
 .\" Please adjust this date whenever revising the manpage.
 .\"
 .\" Some roff macros, for reference:
@@ -25,7 +25,8 @@ eventstat \- a tool to measure system events.
 .br
 
 .SH DESCRIPTION
-eventstat is a program that dumps the current active system events. 
+eventstat is a program that dumps the current active system events that are
+added to the kernel timer list.
 
 .SH OPTIONS
 eventstat options are as follow:
@@ -115,15 +116,19 @@ a wakeup event.
 .LP
 The first row lists the task name of the thread or process. Task names in [ ] brackets are
 kernel threads, other tasks are the names of user space processes.  By default these
-names are derived from the task names from /proc/timer_stats but the \-s \-l options
+names are derived from the task names from kernel trace events but the \-s \-l options
 fetch more complete task names from /proc/pid/cmdline instead.
 .LP
-The second and third rows list the names of the internal Linux kernel timer init and callback functions, respectively.
+The second and third rows list the names of the internal Linux kernel timer init function.
 .LP
 The fourth row lists the total number of wakeup events for each task during the entire run of eventstat.
 .LP
 The subsequent rows list the average number of wakeups per second measured during the sample interval for each 
 task in column two onwards. The first column indicates the sample time (in seconds) since the start of the measuring.
+.SH NOTES
+Version 4.0 of eventstat gathers event timer data from the kernel trace event timers and hence is
+not compatible with previous versions of eventstat. The move to using kernel trace events was
+necessary as the Linux 4.12 kernel dropped support for the /proc/timer_stats interface.
 .SH SEE ALSO
 .BR powertop (8),
 .BR top (1)

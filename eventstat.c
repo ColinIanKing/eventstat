@@ -94,7 +94,6 @@
 #define FLOAT_TINY		(0.0000001)
 #define FLOAT_CMP(a, b)		(fabs(a - b) < FLOAT_TINY)
 
-
 /*
  *  timer_info_t contains per task timer infos.
  */
@@ -804,6 +803,82 @@ static void samples_dump(const char *filename)
 		fprintf(fp, "\n");
 	}
 
+	/*
+	 *  -S option - some statistics, min, max, average, std.dev.
+	 */
+	if (opt_flags & OPT_RESULT_STATS) {
+		fprintf(fp, ",Min:");
+		for (i = 0; i < n; i++) {
+			double min = DBL_MAX;
+
+			for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
+				sample_delta_item_t *sdi =
+					sample_find(sdl, sorted_timer_infos[i]);
+
+				if (sdi) {
+					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+					double val = FLOAT_CMP(duration, 0.0) ?
+						0.0 : sdi->delta_events / duration;
+					if (min > val)
+						min = val;
+				}
+			}
+			fprintf(fp, ",%f", min);
+		}
+		fprintf(fp, "\n");
+
+		fprintf(fp, ",Max:");
+		for (i = 0; i < n; i++) {
+			double max = DBL_MIN;
+
+			for (sdl = sample_delta_list; sdl; sdl= sdl->next) {
+				sample_delta_item_t *sdi =
+					sample_find(sdl, sorted_timer_infos[i]);
+
+				if (sdi) {
+					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+					double val = FLOAT_CMP(duration, 0.0) ?
+						0.0 : sdi->delta_events / duration;
+					if (max < val)
+						max = val;
+				}
+			}
+			fprintf(fp, ",%f", max);
+		}
+		fprintf(fp, "\n");
+
+		fprintf(fp, ",Average:");
+		for (i = 0; i < n; i++)
+			fprintf(fp, ",%f", count == 0 ? 0.0 :
+				(double)sorted_timer_infos[i]->total_events / count);
+		fprintf(fp, "\n");
+
+		/*
+		 *  population standard deviation
+		 */
+		fprintf(fp, ",Std.Dev.:");
+		for (i = 0; i < n; i++) {
+			double average = (double)
+				sorted_timer_infos[i]->total_events / (double)count;
+			double sum = 0.0;
+
+			for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
+				sample_delta_item_t *sdi =
+					sample_find(sdl, sorted_timer_infos[i]);
+				if (sdi) {
+					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+					double diff = FLOAT_CMP(duration, 0.0) ? 0.0 :
+						((double)sdi->delta_events - average) / duration;
+					diff = diff * diff;
+					sum += diff;
+				}
+			}
+			sum = sum / (double)count;
+			fprintf(fp, ",%f", sqrt(sum));
+		}
+		fprintf(fp, "\n");
+	}
+
 	free(sorted_timer_infos);
 	(void)fclose(fp);
 }
@@ -1502,7 +1577,7 @@ int main(int argc, char **argv)
 				err_abort("-n option must be greater than 0\n");
 			break;
 		case 'S':
-			fprintf(stderr, "-S option is deprecated\n");
+			opt_flags |= OPT_RESULT_STATS;
 			break;
 		case 't':
 			opt_threshold = strtoull(optarg, NULL, 10);

@@ -153,7 +153,10 @@ static void es_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2))
 static timer_stat_t *timer_stat_free_list; /* free list of timer stats */
 static timer_info_t *timer_info_list;	/* cache list of timer_info */
 static timer_info_t *timer_info_hash[TABLE_SIZE]; /* hash of timer_info */
-static sample_delta_list_t *sample_delta_list;	/* list of samples, sorted in sample time order */
+static sample_delta_list_t *sample_delta_list_head;
+					/* head of list of samples, sorted in sample time order */
+static sample_delta_list_t *sample_delta_list_tail;
+					/* tail of list of samples, sorted in sample time order */
 static char *csv_results;		/* results in comma separated values */
 static char *get_events_buf;		/* buffer to glob events into */
 static double  opt_threshold;		/* ignore samples with event delta less than this */
@@ -504,7 +507,7 @@ static void handle_sig(int dummy)
  */
 static inline void samples_free(void)
 {
-	sample_delta_list_t *sdl = sample_delta_list;
+	sample_delta_list_t *sdl = sample_delta_list_head;
 
 	while (sdl) {
 		sample_delta_list_t *sdl_next = sdl->next;
@@ -532,10 +535,10 @@ static void sample_add(
 	sample_delta_list_t *sdl;
 	sample_delta_item_t *sdi;
 
-	if (csv_results == NULL)	/* No need if not request */
+	if (csv_results == NULL)	/* No need if not enabled */
 		return;
 
-	for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
+	for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
 		if (FLOAT_CMP(sdl->whence, whence)) {
 			found = true;
 			break;
@@ -550,8 +553,14 @@ static void sample_add(
 		if ((sdl = calloc(1, sizeof(sample_delta_list_t))) == NULL)
 			err_abort("Cannot allocate sample delta list\n");
 		sdl->whence = whence;
-		sdl->next = sample_delta_list;
-		sample_delta_list = sdl;
+
+		if (sample_delta_list_tail) {
+			sample_delta_list_tail->next = sdl;
+			sample_delta_list_tail = sdl;
+		} else {
+			sample_delta_list_head = sdl;
+			sample_delta_list_tail = sdl;
+		}
 	}
 
 	/* Now append the sdi onto the list */
@@ -771,7 +780,7 @@ static void samples_dump(const char *filename)
 		fprintf(fp, ",%" PRIu64, sorted_timer_infos[i]->total_events);
 	fprintf(fp, "\n");
 
-	for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
+	for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
 		time_t t = (time_t)sdl->whence;
 		struct tm *tm;
 
@@ -811,7 +820,7 @@ static void samples_dump(const char *filename)
 		for (i = 0; i < n; i++) {
 			double min = DBL_MAX;
 
-			for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
+			for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
 				sample_delta_item_t *sdi =
 					sample_find(sdl, sorted_timer_infos[i]);
 
@@ -831,7 +840,7 @@ static void samples_dump(const char *filename)
 		for (i = 0; i < n; i++) {
 			double max = DBL_MIN;
 
-			for (sdl = sample_delta_list; sdl; sdl= sdl->next) {
+			for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
 				sample_delta_item_t *sdi =
 					sample_find(sdl, sorted_timer_infos[i]);
 
@@ -862,7 +871,7 @@ static void samples_dump(const char *filename)
 				sorted_timer_infos[i]->total_events / (double)count;
 			double sum = 0.0;
 
-			for (sdl = sample_delta_list; sdl; sdl = sdl->next) {
+			for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
 				sample_delta_item_t *sdi =
 					sample_find(sdl, sorted_timer_infos[i]);
 				if (sdi) {

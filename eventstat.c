@@ -251,7 +251,7 @@ static int pid_max_digits(void)
 
 	buf[n] = '\0';
 	max_digits = 0;
-	while (buf[max_digits] >= '0' && buf[max_digits] <= '9')
+	while ((buf[max_digits] >= '0') && (buf[max_digits] <= '9'))
 		max_digits++;
 	if (max_digits < min_digits)
 		max_digits = min_digits;
@@ -316,9 +316,7 @@ static inline void eventstat_refresh(void)
  *  eventstat_move()
  *	move cursor if in top mode
  */
-static inline void eventstat_move(
-	const int y,
-	const int x)
+static inline void eventstat_move(const int y, const int x)
 {
 	if (curses_init)
 		move(y, x);
@@ -384,7 +382,7 @@ static void set_tracing(const char *path, const char *str, const bool carp)
  *  set_tracing_enable()
  *	enable/disable timer stat
  */
-static void set_tracing_enable(const char *str, const bool carp)
+static inline void set_tracing_enable(const char *str, const bool carp)
 {
 	set_tracing(sys_tracing_enable, str, carp);
 }
@@ -529,9 +527,7 @@ static inline void samples_free(void)
  *	add a timer_stat's delta and info field to a
  *	list at time position whence
  */
-static void sample_add(
-	timer_stat_t *timer_stat,
-	const double whence)
+static void sample_add(timer_stat_t *timer_stat, const double whence)
 {
 	bool	found = false;
 	sample_delta_list_t *sdl;
@@ -655,14 +651,12 @@ static bool pid_a_kernel_thread_guess(const char *task)
  *  pid_a_kernel_thread
  *
  */
-static bool pid_a_kernel_thread(
-	const char *task,
-	const pid_t id)
+static bool pid_a_kernel_thread(const char *task, const pid_t id)
 {
 	const pid_t pgid = id == 0 ? 0 : getpgid(id);
 
 	/* We are either in a container, or with a task with a NULL cmdline */
-	if (sane_procs || id >= 0)
+	if (sane_procs || (id >= 0))
 		return (pgid == 0);
 
 	/* Can't get pgid on that pid, so make a guess */
@@ -1103,10 +1097,9 @@ static void timer_stat_free_list_free(void)
  *  timer_stat_free_contents()
  *	Free timers from a hash table
  */
-static void timer_stat_free_contents(
-	timer_stat_t *timer_stats[])	/* timer stat hash table */
+static void timer_stat_free_contents(timer_stat_t *timer_stats[])
 {
-	int i;
+	size_t i;
 
 	for (i = 0; i < TABLE_SIZE; i++) {
 		timer_stat_t *ts = timer_stats[i];
@@ -1225,7 +1218,7 @@ static OPTIMIZE3 void timer_stat_dump(
 	const double whence,		/* nth sample */
 	timer_stat_t *timer_stats[])	/* timer stats samples */
 {
-	int i;
+	size_t i;
 	timer_stat_t *sorted = NULL;
 
 	for (i = 0; i < TABLE_SIZE; i++) {

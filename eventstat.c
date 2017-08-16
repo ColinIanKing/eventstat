@@ -947,6 +947,8 @@ static HOT timer_info_t *timer_info_find(
 	info->ref_count = 0;
 	info->prev_used = time_now - duration;		/* Fake previous time */
 	info->last_used = time_now;
+	info->total_events = 1;
+	info->delta_events = 1;
 
 	if (info->task == NULL ||
 	    info->task_mangled == NULL ||
@@ -1181,9 +1183,6 @@ static void timer_stat_add(
 	ts_new->info->ref_count++;
 	ts_new->next = timer_stats[h];
 	ts_new->sorted_freq_next = NULL;
-
-	ts_new->info->total_events = 1;
-	ts_new->info->delta_events = 1;
 
 	timer_stats[h] = ts_new;
 	sample_add(ts_new, time_now);

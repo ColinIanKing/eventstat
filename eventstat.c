@@ -118,7 +118,8 @@ typedef struct timer_info {
 
 typedef struct timer_stat {
 	struct timer_stat *next;	/* Next timer stat in hash table */
-	struct timer_stat *sorted_freq_next; /* Next timer stat in event frequency sorted list */
+	struct timer_stat *sorted_freq_next; /* Next timer stat in event */
+					/* frequency sorted list */
 	timer_info_t	*info;		/* Timer info */
 } timer_stat_t;
 
@@ -126,7 +127,8 @@ typedef struct timer_stat {
 typedef struct sample_delta_item {
 	struct sample_delta_item *next;	/* next in list */
 	int64_t		delta_events;	/* delta in events */
-	double		time_delta;	/* difference in time between old and new */
+	double		time_delta;	/* difference in time between old */
+					/* and new */
 	timer_info_t	*info;		/* timer this refers to */
 } sample_delta_item_t;
 
@@ -144,24 +146,33 @@ typedef struct {
 
 #define KERN_TASK_INFO(str)		{ str, sizeof(str) - 1 }
 
-static const char *app_name = "eventstat";
-static const char *sys_tracing_enable = "/sys/kernel/debug/tracing/events/timer/hrtimer_start/enable";
-static const char *sys_tracing_pipe = "/sys/kernel/debug/tracing/trace_pipe";
-static const char *sys_tracing_set_event = "/sys/kernel/debug/tracing/set_event";
-static const char *sys_tracing_filter  = "/sys/kernel/debug/tracing/events/timer/filter";
+static const char * const app_name = "eventstat";
+static const char * const sys_tracing_enable =
+	"/sys/kernel/debug/tracing/events/timer/hrtimer_start/enable";
+static const char * const sys_tracing_pipe =
+	"/sys/kernel/debug/tracing/trace_pipe";
+static const char * const sys_tracing_set_event =
+	"/sys/kernel/debug/tracing/set_event";
+static const char * const sys_tracing_filter =
+	"/sys/kernel/debug/tracing/events/timer/filter";
 
 static void es_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 static timer_stat_t *timer_stat_free_list; /* free list of timer stats */
 static timer_info_t *timer_info_list;	/* cache list of timer_info */
 static timer_info_t *timer_info_hash[TABLE_SIZE]; /* hash of timer_info */
+
+/* head of list of samples, sorted in sample time order */
 static sample_delta_list_t *sample_delta_list_head;
-					/* head of list of samples, sorted in sample time order */
+
+/* tail of list of samples, sorted in sample time order */
 static sample_delta_list_t *sample_delta_list_tail;
-					/* tail of list of samples, sorted in sample time order */
+
+/* ignore samples with event delta less than this */
+static double opt_threshold;
+
 static char *csv_results;		/* results in comma separated values */
 static char *get_events_buf;		/* buffer to glob events into */
-static double  opt_threshold;		/* ignore samples with event delta less than this */
 static uint32_t timer_info_list_length;	/* length of timer_info_list */
 static uint32_t opt_flags;		/* option flags */
 static volatile bool stop_eventstat = false;	/* set by sighandler */
@@ -291,7 +302,6 @@ static void eventstat_winsize(void)
 	}
 }
 
-
 /*
  *  eventstat_clear()
  *	clear screen if in top mode
@@ -396,7 +406,8 @@ static void set_tracing_event(void)
 	set_tracing(sys_tracing_filter, "0", true);
 
 	/* Ignore event stat and idle events */
-	snprintf(buffer, sizeof(buffer), "common_pid != %d && common_pid != 0", getpid());
+	snprintf(buffer, sizeof(buffer),
+		"common_pid != %d && common_pid != 0", getpid());
 	set_tracing(sys_tracing_filter, buffer, true);
 }
 
@@ -565,7 +576,8 @@ static void sample_add(timer_stat_t *timer_stat, const double whence)
 	if ((sdi = calloc(1, sizeof(sample_delta_item_t))) == NULL)
 		err_abort("Cannot allocate sample delta item\n");
 	sdi->delta_events = timer_stat->info->delta_events;
-	sdi->time_delta = timer_stat->info->last_used - timer_stat->info->prev_used;
+	sdi->time_delta = timer_stat->info->last_used -
+			  timer_stat->info->prev_used;
 	sdi->info = timer_stat->info;
 	sdi->next = sdl->list;
 	sdl->list = sdi;
@@ -726,8 +738,7 @@ static inline double duration_round(const double duration)
 static void samples_dump(const char *filename)
 {
 	timer_info_t **sorted_timer_infos;
-	size_t i = 0;
-	size_t n;
+	size_t i, n;
 	FILE *fp;
 	uint64_t count = 0;
 	double first_time = -1.0;
@@ -742,7 +753,9 @@ static void samples_dump(const char *filename)
 		return;
 	}
 
-	if ((sorted_timer_infos = calloc(timer_info_list_length, sizeof(timer_info_t*))) == NULL)
+	sorted_timer_infos = calloc(timer_info_list_length,
+				sizeof(timer_info_t *));
+	if (!sorted_timer_infos)
 		err_abort("Cannot allocate buffer for sorting timer_infos\n");
 
 	/* Just want the timers with some non-zero total */
@@ -751,7 +764,8 @@ static void samples_dump(const char *filename)
 			sorted_timer_infos[n++] = info;
 	}
 
-	qsort(sorted_timer_infos, n, sizeof(timer_info_t *), info_compare_total);
+	qsort(sorted_timer_infos, n,
+		sizeof(timer_info_t *), info_compare_total);
 
 	fprintf(fp, "Time:,Task:");
 	for (i = 0; i < n; i++) {
@@ -789,7 +803,9 @@ static void samples_dump(const char *filename)
 			first_time = sdl->whence;
 		fprintf(fp, ",%f", duration_round(sdl->whence - first_time));
 
-		/* Scan in timer info order to be consistent for all sdl rows */
+		/*
+		 * Scan in timer info order to be consistent for all sdl rows
+		 */
 		for (i = 0; i < n; i++) {
 			sample_delta_item_t *sdi =
 				sample_find(sdl, sorted_timer_infos[i]);
@@ -800,7 +816,8 @@ static void samples_dump(const char *filename)
 			 */
 			if (sdi) {
 				double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
-				fprintf(fp, ",%f", FLOAT_CMP(duration, 0.0) ? -99.99 :
+				fprintf(fp, ",%f",
+					FLOAT_CMP(duration, 0.0) ? -99.99 :
 					(double)sdi->delta_events / duration);
 			} else
 				fprintf(fp, ",%f", 0.0);
@@ -883,7 +900,6 @@ static void samples_dump(const char *filename)
 		}
 		fprintf(fp, "\n");
 	}
-
 	free(sorted_timer_infos);
 	(void)fclose(fp);
 }
@@ -909,7 +925,8 @@ static HOT timer_info_t *timer_info_find(
 			return info;
 		}
 	}
-	if ((info = calloc(1, sizeof(timer_info_t))) == NULL)
+	info = calloc(1, sizeof(timer_info_t));
+	if (!info)
 		err_abort("Cannot allocate timer info\n");
 
 	info->pid = new_info->pid;
@@ -1247,7 +1264,8 @@ static OPTIMIZE3 void timer_stat_dump(
 
 		ta_size = TASK_WIDTH + sz;
 		if_size = FUNC_WIDTH + (3 * sz);
-		cb_size = cols - (8 + 1 + pid_size + 1 + ta_size + 1 + if_size + 2);
+		cb_size = cols - (8 + 1 + pid_size + 1 +
+			  ta_size + 1 + if_size + 2);
 		if (cb_size < 0)
 			cb_size = 20;
 
@@ -1270,7 +1288,8 @@ static OPTIMIZE3 void timer_stat_dump(
 			if (((n_lines == -1) || (j < n_lines)) &&
 			    (sorted->info->delta_events != 0)) {
 				char *task = (opt_flags & OPT_CMD) ?
-					sorted->info->cmdline : sorted->info->task_mangled;
+					sorted->info->cmdline :
+					sorted->info->task_mangled;
 				if (!*task)
 					task = sorted->info->task_mangled;
 
@@ -1279,12 +1298,14 @@ static OPTIMIZE3 void timer_stat_dump(
 					es_printf("%8" PRIu64 " ",
 						sorted->info->total_events);
 				else
-					es_printf("%8.2f ", (double)sorted->info->delta_events / duration);
+					es_printf("%8.2f ",
+						(double)sorted->info->delta_events / duration);
 
 				if (opt_flags & OPT_BRIEF) {
 
 					es_printf("%*d %s\n",
-						pid_size, sorted->info->pid, task);
+						pid_size, sorted->info->pid,
+						task);
 				} else {
 					es_printf("%*d %-*.*s",
 						pid_size, sorted->info->pid,
@@ -1294,14 +1315,14 @@ static OPTIMIZE3 void timer_stat_dump(
 							sorted->info->timer);
 					}
 					es_printf(" %-*.*s\n",
-						if_size, if_size, sorted->info->func);
+						if_size, if_size,
+						sorted->info->func);
 				}
 			}
 			total += sorted->info->delta_events;
 			if (sorted->info->kernel_thread)
 				kt_total += sorted->info->delta_events;
 			sorted->info->delta_events = 0;
-
 			sorted = sorted->sorted_freq_next;
 		}
 		eventstat_move(LINES - 1, 0);
@@ -1409,13 +1430,13 @@ static char *read_events(const double time_end)
 
 /*
  *  get_events()
- *	parse /sys/kernel/debug/tracing/trace_pipe and populate a timer stat hash table with
- *	unique events
+ *	parse /sys/kernel/debug/tracing/trace_pipe and populate
+ *	a timer stat hash table with unique events
  */
 static void get_events(
 	timer_stat_t *timer_stats[],
 	const double time_now,
-	double duration)
+	const double duration)
 {
 	const size_t app_name_len = strlen(app_name);
 	const double time_end = time_now + duration - 0.05;
@@ -1493,7 +1514,8 @@ static void get_events(
 
 			strcpy(tmp, task);
 			tmp[13] = '\0';
-			snprintf(task_mangled, sizeof(task_mangled), "[%s]", tmp);
+			snprintf(task_mangled, sizeof(task_mangled),
+				"[%s]", tmp);
 		} else {
 			strcpy(task_mangled, task);
 		}
@@ -1657,8 +1679,8 @@ int main(int argc, char **argv)
 	opt_threshold *= duration_secs;
 
 	if (geteuid() != 0)
-		err_abort("%s requires root privileges to gather trace event data\n",
-			app_name);
+		err_abort("%s requires root privileges to gather "
+			"trace event data\n", app_name);
 
 	sane_procs = sane_proc_pid_info();
 	if (!sane_procs)

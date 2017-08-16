@@ -1259,7 +1259,6 @@ static OPTIMIZE3 void timer_stat_dump(
 		int32_t j = 0;
 		const int pid_size = pid_max_digits();
 		int sz, ta_size, fn_size = 0;
-		int fields;
 		int min_width;
 
 		eventstat_winsize();
@@ -1267,11 +1266,6 @@ static OPTIMIZE3 void timer_stat_dump(
 			resizeterm(rows, cols);
 			refresh();
 			resized = false;
-		}
-
-		if (!(opt_flags & OPT_BRIEF)) {
-			fields++;
-				fields++;
 		}
 
 		/* Minimum width w/o task or func info */

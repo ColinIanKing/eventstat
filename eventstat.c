@@ -108,6 +108,7 @@ typedef struct timer_info {
 	char		*func;		/* Kernel waiting func */
 	char		*ident;		/* Unique identity */
 	bool		kernel_thread;	/* True if task is a kernel thread */
+	uint32_t	ref_count;	/* Timer stat reference count */
 	uint64_t	timer;		/* Timer ID */
 	uint64_t	total_events;	/* Total number of events */
 	uint64_t	delta_events;	/* Events in one time period */
@@ -940,6 +941,7 @@ static HOT timer_info_t *timer_info_find(
 	info->delta_events = new_info->delta_events;
 	info->time_total = new_info->time_total;
 	info->timer = new_info->timer;
+	info->ref_count = 0;
 	info->prev_used = time_now - duration;		/* Fake previous time */
 	info->last_used = time_now;
 
@@ -995,7 +997,8 @@ static void timer_info_purge_old_from_timer_list(
 		 * Only remove from list once all timer
 		 * stats no longer reference it
 		 */
-		if (info->last_used + TIMER_REAP_AGE < time_now) {
+		if ((info->ref_count == 0) &&
+		    (info->last_used + TIMER_REAP_AGE < time_now)) {
 			if (prev == NULL)
 				*list = next;
 			else
@@ -1025,7 +1028,8 @@ static void timer_info_purge_old_from_hash_list(
 		 * Only remove and free once all timer stats no
 		 * longer reference it
 		 */
-		if (info->last_used + TIMER_REAP_AGE < time_now) {
+		if ((info->ref_count == 0) &&
+		    (info->last_used + TIMER_REAP_AGE < time_now)) {
 			if (prev == NULL)
 				*list = next;
 			else
@@ -1124,6 +1128,8 @@ static void timer_stat_free_contents(timer_stat_t *timer_stats[])
 		while (ts) {
 			timer_stat_t *next = ts->next;
 
+			/* Decrement info ref count */
+			ts->info->ref_count--;
 			/* Add it onto the timer stat free list */
 			ts->next = timer_stat_free_list;
 			timer_stat_free_list = ts;
@@ -1169,6 +1175,7 @@ static void timer_stat_add(
 	}
 
 	ts_new->info = timer_info_find(info, ident, time_now, duration);
+	ts_new->info->ref_count++;
 	ts_new->next = timer_stats[h];
 	ts_new->sorted_freq_next = NULL;
 

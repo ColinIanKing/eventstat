@@ -1364,8 +1364,7 @@ static char *read_events(const double time_end)
 		if (duration < 0.0)
 			break;
 
-		tv.tv_sec = (long)duration;
-		tv.tv_usec = (long)(1000000 * (duration - (long)duration));
+		tv = double_to_timeval(duration);
 		FD_ZERO(&rfds);
 		FD_SET(fd, &rfds);
 

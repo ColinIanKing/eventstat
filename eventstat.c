@@ -1360,7 +1360,7 @@ static char *read_events(const double time_end)
 		err_abort("Cannot open %s\n", sys_tracing_pipe);
 
 	size = 0;
-	for (;;) {
+	while (!stop_eventstat) {
 		ssize_t ret;
 		int rc;
 		static char buffer[EVENT_BUF_SIZE];
@@ -1386,8 +1386,9 @@ static char *read_events(const double time_end)
 		if (ret == 0)
 			continue;
 		if (ret < 0) {
-			if ((errno == EINTR) ||
-			    (errno != EAGAIN)) {
+			if (!stop_eventstat &&
+			    ((errno == EINTR) ||
+			     (errno != EAGAIN))) {
 				continue;
 			}
 			break;

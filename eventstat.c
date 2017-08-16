@@ -55,6 +55,7 @@
 #define OPT_USER		(0x00000200)
 #define OPT_SHOW_WHENCE		(0x00000400)
 #define OPT_TOP			(0x00000800)
+#define OPT_TIMER_ID		(0x00001000)
 #define OPT_CMD			(OPT_CMD_SHORT | OPT_CMD_LONG)
 
 #define EVENT_BUF_SIZE		(64 * 1024)
@@ -107,6 +108,7 @@ typedef struct timer_info {
 	char		*func;		/* Kernel waiting func */
 	char		*ident;		/* Unique identity */
 	bool		kernel_thread;	/* True if task is a kernel thread */
+	uint64_t	timer;		/* Timer ID */
 	uint64_t	total_events;	/* Total number of events */
 	uint64_t	delta_events;	/* Events in one time period */
 	double		time_total;	/* Total time */
@@ -926,6 +928,7 @@ static HOT timer_info_t *timer_info_find(
 	info->total_events = new_info->total_events;
 	info->delta_events = new_info->delta_events;
 	info->time_total = new_info->time_total;
+	info->timer = new_info->timer;
 	info->prev_used = time_now - duration;		/* Fake previous time */
 	info->last_used = time_now;
 
@@ -1067,10 +1070,15 @@ static inline void timer_info_list_free(void)
  */
 static char *make_hash_ident(const timer_info_t *info)
 {
-	static char ident[1024];
+	static char ident[128];
 
-	snprintf(ident, sizeof(ident), "%x%s%8.8s",
-		info->pid, info->task, info->func);
+	if (opt_flags & OPT_TIMER_ID) {
+		snprintf(ident, sizeof(ident), "%x%s%8.8s%" PRIx64,
+			info->pid, info->task, info->func, info->timer);
+	} else {
+		snprintf(ident, sizeof(ident), "%x%s%8.8s",
+			info->pid, info->task, info->func);
+	}
 	return ident;
 }
 
@@ -1255,11 +1263,15 @@ static OPTIMIZE3 void timer_stat_dump(
 				"Events" : "Event/s",
 				pid_size, pid_size, "PID",
 				ta_size, ta_size, "Task");
-		if (!(opt_flags & OPT_BRIEF))
-			es_printf(" %-*.*s\n",
-				if_size, if_size, "Init Function");
-		else
+		if (!(opt_flags & OPT_BRIEF)) {
+			if (opt_flags & OPT_TIMER_ID) {
+				es_printf(" %-16.16s", "Timer ID");
+			}
+			es_printf("%-*.*s\n", if_size, if_size,
+				" Init Function");
+		} else {
 			es_printf("\n");
+		}
 
 		while (sorted) {
 			if (((n_lines == -1) || (j < n_lines)) &&
@@ -1281,9 +1293,14 @@ static OPTIMIZE3 void timer_stat_dump(
 					es_printf("%*d %s\n",
 						pid_size, sorted->info->pid, task);
 				} else {
-					es_printf("%*d %-*.*s %-*.*s\n",
+					es_printf("%*d %-*.*s",
 						pid_size, sorted->info->pid,
-						ta_size, ta_size, task,
+						ta_size, ta_size, task);
+					if (opt_flags & OPT_TIMER_ID) {
+						es_printf(" %16" PRIx64,
+							sorted->info->timer);
+					}
+					es_printf(" %-*.*s\n",
 						if_size, if_size, sorted->info->func);
 				}
 			}
@@ -1419,7 +1436,6 @@ static void get_events(
 		char task[64];
 		char task_mangled[64];
 		char func[64];
-		char timer[64];
 		char *cmdline;
 		int mask;
 		timer_info_t info;
@@ -1442,7 +1458,7 @@ static void get_events(
 			 *  Parse something like the following:
 			 *  gnome-shell-3515  [003] d.h. 101499.108349: hrtimer_start: hrtimer=ffff99979e2d4600 function=tick_sched_timer expires=101497144000000 softexpires=101497144000000
 			 */
-			if (sscanf(tmpptr, "%s %*s %*s %*f: hrtimer_start: hrtimer=%s function=%s", task, timer, func) != 3)
+			if (sscanf(tmpptr, "%s %*s %*s %*f: hrtimer_start: hrtimer=%" PRIx64 " function=%s", task, &info.timer, func) != 3)
 				goto next;
 		} else {
 			goto next;
@@ -1557,7 +1573,7 @@ int main(int argc, char **argv)
 	int i;
 
 	for (;;) {
-		int c = getopt(argc, argv, "bcCdksSlhn:qr:t:Tuw");
+		int c = getopt(argc, argv, "bcCdksSlhin:qr:t:Tuw");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -1576,6 +1592,9 @@ int main(int argc, char **argv)
 		case 'h':
 			show_usage();
 			eventstat_exit(EXIT_SUCCESS);
+		case 'i':
+			opt_flags |= OPT_TIMER_ID;
+			break;
 		case 'n':
 			errno = 0;
 			n_lines = (int32_t)strtol(optarg, NULL, 10);

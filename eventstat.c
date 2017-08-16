@@ -61,8 +61,11 @@
 #define EVENT_BUF_SIZE		(64 * 1024)
 #define TIMER_REAP_AGE		(600)	/* Age of timer before it is reaped */
 #define TIMER_REAP_THRESHOLD	(30)
+#define EVENTS_WIDTH		(8)
 #define TASK_WIDTH		(15)
-#define FUNC_WIDTH		(25)
+#define TIMER_ID_WIDTH		(16)
+#define FUNC_WIDTH		(24)
+#define FUNC_WIDTH_MAX		(30)
 
 #define _VER_(major, minor, patchlevel) \
 	((major * 10000) + (minor * 100) + patchlevel)
@@ -1256,7 +1259,9 @@ static OPTIMIZE3 void timer_stat_dump(
 		uint64_t total = 0UL, kt_total = 0UL;
 		int32_t j = 0;
 		const int pid_size = pid_max_digits();
-		int sz, ta_size, if_size, cb_size, ti_size;
+		int sz, ta_size, fn_size = 0;
+		int fields;
+		int min_width;
 
 		eventstat_winsize();
 		if (resized && curses_init) {
@@ -1265,28 +1270,48 @@ static OPTIMIZE3 void timer_stat_dump(
 			resized = false;
 		}
 
-		sz = (cols - 80) / 6;
-		if (sz < 0)
-			sz = 0;
+		if (!(opt_flags & OPT_BRIEF)) {
+			fields++;
+				fields++;
+		}
 
-		ta_size = TASK_WIDTH + sz;
-		if_size = FUNC_WIDTH + (3 * sz);
-		ti_size = (opt_flags & OPT_TIMER_ID) ? 17 : 0;
-		cb_size = cols - (8 + 1 + pid_size + 1 +
-			  ta_size + 1 + ti_size + if_size + 2);
-		if (cb_size < 0)
-			cb_size = 20;
+		/* Minimum width w/o task or func info */
+		min_width = EVENTS_WIDTH + 1 + \
+			    1 + \
+			    pid_size + 1;
+		if (!(opt_flags & OPT_BRIEF)) {
+			if (opt_flags & OPT_TIMER_ID)
+				min_width += TIMER_ID_WIDTH + 1;
+			fn_size = FUNC_WIDTH;
+		}
 
-		es_printf("%8s %-*.*s %-*.*s",
+		sz = cols - min_width;
+		sz = (sz < 0) ? 0 : sz;
+
+		if (fn_size) {
+			fn_size += (sz >> 1);
+			if (fn_size > FUNC_WIDTH_MAX)
+				fn_size = FUNC_WIDTH_MAX;
+
+			min_width += fn_size;
+			sz = cols - min_width;
+			sz = (sz < 0) ? 0 : sz;
+		}
+		ta_size = sz;
+		if (ta_size < TASK_WIDTH)
+			ta_size = TASK_WIDTH;
+		
+		es_printf("%*.*s %-*.*s %-*.*s",
+			EVENTS_WIDTH, EVENTS_WIDTH,
 			(opt_flags & OPT_CUMULATIVE) ?
 				"Events" : "Event/s",
-				pid_size, pid_size, "PID",
-				ta_size, ta_size, "Task");
+			pid_size, pid_size, "PID",
+			ta_size, ta_size, "Task");
 		if (!(opt_flags & OPT_BRIEF)) {
 			if (opt_flags & OPT_TIMER_ID) {
 				es_printf(" %-16.16s", "Timer ID");
 			}
-			es_printf("%-*.*s\n", if_size, if_size,
+			es_printf("%-*.*s\n", fn_size, fn_size,
 				" Init Function");
 		} else {
 			es_printf("\n");
@@ -1303,10 +1328,12 @@ static OPTIMIZE3 void timer_stat_dump(
 
 				j++;
 				if (opt_flags & OPT_CUMULATIVE)
-					es_printf("%8" PRIu64 " ",
+					es_printf("%*" PRIu64 " ",
+						EVENTS_WIDTH,
 						sorted->info->total_events);
 				else
-					es_printf("%8.2f ",
+					es_printf("%*.2f ",
+						EVENTS_WIDTH,
 						(double)sorted->info->delta_events / duration);
 
 				if (opt_flags & OPT_BRIEF) {
@@ -1323,7 +1350,7 @@ static OPTIMIZE3 void timer_stat_dump(
 							sorted->info->timer);
 					}
 					es_printf(" %-*.*s\n",
-						if_size, if_size,
+						fn_size - 1, fn_size - 1,
 						sorted->info->func);
 				}
 			}

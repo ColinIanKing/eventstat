@@ -1665,8 +1665,8 @@ int main(int argc, char **argv)
 	opt_threshold *= duration_secs;
 
 	if (geteuid() != 0)
-		err_abort("%s requires root privileges to write to %s\n",
-			app_name, sys_tracing_pipe);
+		err_abort("%s requires root privileges to gather trace event data\n",
+			app_name);
 
 	sane_procs = sane_proc_pid_info();
 	if (!sane_procs)

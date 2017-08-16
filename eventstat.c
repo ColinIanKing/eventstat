@@ -1249,7 +1249,7 @@ static OPTIMIZE3 void timer_stat_dump(
 		uint64_t total = 0UL, kt_total = 0UL;
 		int32_t j = 0;
 		const int pid_size = pid_max_digits();
-		int sz, ta_size, if_size, cb_size;
+		int sz, ta_size, if_size, cb_size, ti_size;
 
 		eventstat_winsize();
 		if (resized && curses_init) {
@@ -1264,8 +1264,9 @@ static OPTIMIZE3 void timer_stat_dump(
 
 		ta_size = TASK_WIDTH + sz;
 		if_size = FUNC_WIDTH + (3 * sz);
+		ti_size = (opt_flags & OPT_TIMER_ID) ? 17 : 0;
 		cb_size = cols - (8 + 1 + pid_size + 1 +
-			  ta_size + 1 + if_size + 2);
+			  ta_size + 1 + ti_size + if_size + 2);
 		if (cb_size < 0)
 			cb_size = 20;
 

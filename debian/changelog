@@ -1,3 +1,22 @@
+eventstat (0.04.01-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Remove unused variable fields
+  * Fix -c cumulative stats
+  * Make column sizing more intelligent
+  * snapcraft: Makefile: set LC_ALL=C.UTF-8 LANG=C.UTF-8
+  * Add back ref_count reference counting which was accidentally removed
+  * Compute column width correctly with -i mode being used
+  * Make source more 80 column friendly
+  * Use double_to_timeval instead of time coversion
+  * Minor code clean up, no functional changes
+  * Fix non-root failure message
+  * Break out of trace reading loop on SIGINT
+  * Add -i timer ID information mode
+  * Add libncurses5-dev to snapcraft build dependencies
+
+ -- Colin King <colin.king@canonical.com>  Wed, 16 Aug 2017 18:48:43 +0100
+
 eventstat (0.04.00-1) unstable; urgency=medium
 
   * Makefile: bump version

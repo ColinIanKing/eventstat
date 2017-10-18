@@ -1293,7 +1293,7 @@ static OPTIMIZE3 void timer_stat_dump(
 		ta_size = sz;
 		if (ta_size < TASK_WIDTH)
 			ta_size = TASK_WIDTH;
-		
+
 		es_printf("%*.*s %-*.*s %-*.*s",
 			EVENTS_WIDTH, EVENTS_WIDTH,
 			(opt_flags & OPT_CUMULATIVE) ?

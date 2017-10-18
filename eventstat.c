@@ -150,30 +150,30 @@ typedef struct {
 
 #define KERN_TASK_INFO(str)		{ str, sizeof(str) - 1 }
 
-static const char * const app_name = "eventstat";
-static const char * const sys_tracing_enable =
+static const char * const g_app_name = "eventstat";
+static const char * const g_sys_tracing_enable =
 	"/sys/kernel/debug/tracing/events/timer/hrtimer_start/enable";
-static const char * const sys_tracing_pipe =
+static const char * const g_sys_tracing_pipe =
 	"/sys/kernel/debug/tracing/trace_pipe";
-static const char * const sys_tracing_set_event =
+static const char * const g_sys_tracing_set_event =
 	"/sys/kernel/debug/tracing/set_event";
-static const char * const sys_tracing_filter =
+static const char * const g_sys_tracing_filter =
 	"/sys/kernel/debug/tracing/events/timer/filter";
 
 static void es_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
-static timer_stat_t *timer_stat_free_list; /* free list of timer stats */
-static timer_info_t *timer_info_list;	/* cache list of timer_info */
-static timer_info_t *timer_info_hash[TABLE_SIZE]; /* hash of timer_info */
+static timer_stat_t *g_timer_stat_free_list;	/* free list of timer stats */
+static timer_info_t *g_timer_info_list;		/* cache list of timer_info */
+static timer_info_t *g_timer_info_hash[TABLE_SIZE]; /* hash of timer_info */
 
 /* head of list of samples, sorted in sample time order */
-static sample_delta_list_t *sample_delta_list_head;
+static sample_delta_list_t *g_sample_delta_list_head;
 
 /* tail of list of samples, sorted in sample time order */
-static sample_delta_list_t *sample_delta_list_tail;
+static sample_delta_list_t *g_sample_delta_list_tail;
 
 /* ignore samples with event delta less than this */
-static double opt_threshold;
+static double g_opt_threshold;
 
 static char *g_csv_results;		/* results in comma separated values */
 static char *g_get_events_buf;		/* buffer to glob events into */
@@ -190,7 +190,7 @@ static int g_cols = 80;			/* tty size, columns */
  *  Attempt to catch a range of signals so
  *  we can clean
  */
-static const int signals[] = {
+static const int g_signals[] = {
 	/* POSIX.1-1990 */
 #ifdef SIGHUP
 	SIGHUP,
@@ -398,21 +398,21 @@ static void set_tracing(const char *path, const char *str, const bool carp)
  */
 static inline void set_tracing_enable(const char *str, const bool carp)
 {
-	set_tracing(sys_tracing_enable, str, carp);
+	set_tracing(g_sys_tracing_enable, str, carp);
 }
 
 static void set_tracing_event(void)
 {
 	char buffer[64];
 
-	set_tracing(sys_tracing_set_event, "\n", true);
-	set_tracing(sys_tracing_set_event, "hrtimer_start", true);
-	set_tracing(sys_tracing_filter, "0", true);
+	set_tracing(g_sys_tracing_set_event, "\n", true);
+	set_tracing(g_sys_tracing_set_event, "hrtimer_start", true);
+	set_tracing(g_sys_tracing_filter, "0", true);
 
 	/* Ignore event stat and idle events */
 	snprintf(buffer, sizeof(buffer),
 		"common_pid != %d && common_pid != 0", getpid());
-	set_tracing(sys_tracing_filter, buffer, true);
+	set_tracing(g_sys_tracing_filter, buffer, true);
 }
 
 
@@ -522,7 +522,7 @@ static void handle_sig(int dummy)
  */
 static inline void samples_free(void)
 {
-	sample_delta_list_t *sdl = sample_delta_list_head;
+	sample_delta_list_t *sdl = g_sample_delta_list_head;
 
 	while (sdl) {
 		sample_delta_list_t *sdl_next = sdl->next;
@@ -551,7 +551,7 @@ static void sample_add(timer_stat_t *timer_stat, const double whence)
 	if (g_csv_results == NULL)	/* No need if not enabled */
 		return;
 
-	for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
+	for (sdl = g_sample_delta_list_head; sdl; sdl = sdl->next) {
 		if (FLOAT_CMP(sdl->whence, whence)) {
 			found = true;
 			break;
@@ -567,12 +567,12 @@ static void sample_add(timer_stat_t *timer_stat, const double whence)
 			err_abort("Cannot allocate sample delta list\n");
 		sdl->whence = whence;
 
-		if (sample_delta_list_tail) {
-			sample_delta_list_tail->next = sdl;
-			sample_delta_list_tail = sdl;
+		if (g_sample_delta_list_tail) {
+			g_sample_delta_list_tail->next = sdl;
+			g_sample_delta_list_tail = sdl;
 		} else {
-			sample_delta_list_head = sdl;
-			sample_delta_list_tail = sdl;
+			g_sample_delta_list_head = sdl;
+			g_sample_delta_list_tail = sdl;
 		}
 	}
 
@@ -763,7 +763,7 @@ static void samples_dump(const char *filename)
 		err_abort("Cannot allocate buffer for sorting timer_infos\n");
 
 	/* Just want the timers with some non-zero total */
-	for (n = 0, info = timer_info_list; info; info = info->next) {
+	for (n = 0, info = g_timer_info_list; info; info = info->next) {
 		if (info->total_events > 0)
 			sorted_timer_infos[n++] = info;
 	}
@@ -794,7 +794,7 @@ static void samples_dump(const char *filename)
 		fprintf(fp, ",%" PRIu64, sorted_timer_infos[i]->total_events);
 	fprintf(fp, "\n");
 
-	for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
+	for (sdl = g_sample_delta_list_head; sdl; sdl = sdl->next) {
 		time_t t = (time_t)sdl->whence;
 		struct tm *tm;
 
@@ -837,7 +837,7 @@ static void samples_dump(const char *filename)
 		for (i = 0; i < n; i++) {
 			double min = DBL_MAX;
 
-			for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
+			for (sdl = g_sample_delta_list_head; sdl; sdl = sdl->next) {
 				sample_delta_item_t *sdi =
 					sample_find(sdl, sorted_timer_infos[i]);
 
@@ -857,7 +857,7 @@ static void samples_dump(const char *filename)
 		for (i = 0; i < n; i++) {
 			double max = DBL_MIN;
 
-			for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
+			for (sdl = g_sample_delta_list_head; sdl; sdl = sdl->next) {
 				sample_delta_item_t *sdi =
 					sample_find(sdl, sorted_timer_infos[i]);
 
@@ -888,7 +888,7 @@ static void samples_dump(const char *filename)
 				sorted_timer_infos[i]->total_events / (double)count;
 			double sum = 0.0;
 
-			for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
+			for (sdl = g_sample_delta_list_head; sdl; sdl = sdl->next) {
 				sample_delta_item_t *sdi =
 					sample_find(sdl, sorted_timer_infos[i]);
 				if (sdi) {
@@ -922,7 +922,7 @@ static HOT timer_info_t *timer_info_find(
 	timer_info_t *info;
 	const uint32_t h = hash_djb2a(ident);
 
-	for (info = timer_info_hash[h]; info; info = info->hash_next) {
+	for (info = g_timer_info_hash[h]; info; info = info->hash_next) {
 		if (strcmp(ident, info->ident) == 0) {
 			info->prev_used = info->last_used;
 			info->last_used = time_now;
@@ -959,11 +959,11 @@ static HOT timer_info_t *timer_info_find(
 	}
 
 	/* Does not exist in list, append it */
-	info->next = timer_info_list;
-	timer_info_list = info;
+	info->next = g_timer_info_list;
+	g_timer_info_list = info;
 	g_timer_info_list_length++;
-	info->hash_next = timer_info_hash[h];
-	timer_info_hash[h] = info;
+	info->hash_next = g_timer_info_hash[h];
+	g_timer_info_hash[h] = info;
 
 	return info;
 }
@@ -1062,9 +1062,9 @@ static inline void timer_info_purge_old(const double time_now)
 		size_t i;
 
 		count = 0;
-		timer_info_purge_old_from_timer_list(&timer_info_list, time_now);
+		timer_info_purge_old_from_timer_list(&g_timer_info_list, time_now);
 		for (i = 0; i < TABLE_SIZE; i++)
-			timer_info_purge_old_from_hash_list(&timer_info_hash[i], time_now);
+			timer_info_purge_old_from_hash_list(&g_timer_info_hash[i], time_now);
 	}
 }
 
@@ -1074,7 +1074,7 @@ static inline void timer_info_purge_old(const double time_now)
  */
 static inline void timer_info_list_free(void)
 {
-	timer_info_t *info = timer_info_list;
+	timer_info_t *info = g_timer_info_list;
 
 	/* Free list and timers on list */
 	while (info) {
@@ -1108,7 +1108,7 @@ static char *make_hash_ident(const timer_info_t *info)
  */
 static void timer_stat_free_list_free(void)
 {
-	timer_stat_t *ts = timer_stat_free_list;
+	timer_stat_t *ts = g_timer_stat_free_list;
 
 	while (ts) {
 		timer_stat_t *next = ts->next;
@@ -1116,7 +1116,7 @@ static void timer_stat_free_list_free(void)
 		free(ts);
 		ts = next;
 	}
-	timer_stat_free_list = NULL;
+	g_timer_stat_free_list = NULL;
 }
 
 /*
@@ -1136,8 +1136,8 @@ static void timer_stat_free_contents(timer_stat_t *timer_stats[])
 			/* Decrement info ref count */
 			ts->info->ref_count--;
 			/* Add it onto the timer stat free list */
-			ts->next = timer_stat_free_list;
-			timer_stat_free_list = ts;
+			ts->next = g_timer_stat_free_list;
+			g_timer_stat_free_list = ts;
 
 			ts = next;
 		}
@@ -1169,10 +1169,10 @@ static void timer_stat_add(
 		}
 	}
 	/* Not found, it is new */
-	if (timer_stat_free_list) {
+	if (g_timer_stat_free_list) {
 		/* Get new one from free list */
-		ts_new = timer_stat_free_list;
-		timer_stat_free_list = timer_stat_free_list->next;
+		ts_new = g_timer_stat_free_list;
+		g_timer_stat_free_list = g_timer_stat_free_list->next;
 	} else {
 		/* Get one from heap */
 		if ((ts_new = malloc(sizeof(*ts_new))) == NULL)
@@ -1393,13 +1393,13 @@ static char *read_events(const double time_end)
 	if (g_get_events_buf == NULL) {
 		if ((g_get_events_buf = malloc(EVENT_BUF_SIZE << 1)) == NULL)
 			err_abort("Cannot read %s, out of memory\n",
-				sys_tracing_pipe);
+				g_sys_tracing_pipe);
 
 		get_events_size = (EVENT_BUF_SIZE << 1);
 	}
 
-	if ((fd = open(sys_tracing_pipe, O_RDONLY)) < 0)
-		err_abort("Cannot open %s\n", sys_tracing_pipe);
+	if ((fd = open(g_sys_tracing_pipe, O_RDONLY)) < 0)
+		err_abort("Cannot open %s\n", g_sys_tracing_pipe);
 
 	size = 0;
 	while (!g_stop_eventstat) {
@@ -1443,7 +1443,7 @@ static char *read_events(const double time_end)
 			if (!tmpptr) {
 				(void)close(fd);
 				err_abort("Cannot read %s, out of memory\n",
-					sys_tracing_pipe);
+					g_sys_tracing_pipe);
 			}
 			g_get_events_buf = tmpptr;
 		}
@@ -1466,7 +1466,7 @@ static void get_events(
 	const double time_now,
 	const double duration)
 {
-	const size_t app_name_len = strlen(app_name);
+	const size_t app_name_len = strlen(g_app_name);
 	const double time_end = time_now + duration - 0.05;
 	char *tmpptr = read_events(time_end);
 
@@ -1548,7 +1548,7 @@ static void get_events(
 			strcpy(task_mangled, task);
 		}
 
-		if (strncmp(task, app_name, app_name_len)) {
+		if (strncmp(task, g_app_name, app_name_len)) {
 			info.task = task;
 			info.cmdline = cmdline ? cmdline : task_mangled;
 			info.task_mangled = task_mangled;
@@ -1571,8 +1571,8 @@ next:
  */
 static void show_usage(void)
 {
-	printf("%s, version %s\n\n", app_name, VERSION);
-	printf("Usage: %s [options] [duration] [count]\n", app_name);
+	printf("%s, version %s\n\n", g_app_name, VERSION);
+	printf("Usage: %s [options] [duration] [count]\n", g_app_name);
 	printf("Options are:\n"
 		"  -c\t\treport cumulative events rather than events per second.\n"
 		"  -C\t\treport event count rather than event per second in CSV output.\n"
@@ -1651,8 +1651,8 @@ int main(int argc, char **argv)
 			g_opt_flags |= OPT_RESULT_STATS;
 			break;
 		case 't':
-			opt_threshold = strtoull(optarg, NULL, 10);
-			if (opt_threshold < 1)
+			g_opt_threshold = strtoull(optarg, NULL, 10);
+			if (g_opt_threshold < 1)
 				err_abort("-t threshold must be 1 or more.\n");
 			break;
 		case 'T':
@@ -1704,23 +1704,23 @@ int main(int argc, char **argv)
 			err_abort("Count must be > 0\n");
 	}
 
-	opt_threshold *= duration_secs;
+	g_opt_threshold *= duration_secs;
 
 	if (geteuid() != 0)
 		err_abort("%s requires root privileges to gather "
-			"trace event data\n", app_name);
+			"trace event data\n", g_app_name);
 
 	g_sane_procs = sane_proc_pid_info();
 	if (!g_sane_procs)
 		g_opt_flags &= ~(OPT_CMD_SHORT | OPT_CMD_LONG);
 
 	memset(&new_action, 0, sizeof(new_action));
-	for (i = 0; signals[i] != -1; i++) {
+	for (i = 0; g_signals[i] != -1; i++) {
 		new_action.sa_handler = handle_sig;
 		sigemptyset(&new_action.sa_mask);
 		new_action.sa_flags = 0;
 
-		if (sigaction(signals[i], &new_action, NULL) < 0)
+		if (sigaction(g_signals[i], &new_action, NULL) < 0)
 			err_abort("sigaction failed: errno=%d (%s)\n",
 				errno, strerror(errno));
 	}

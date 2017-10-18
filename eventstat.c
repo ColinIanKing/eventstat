@@ -43,6 +43,8 @@
 
 #define TABLE_SIZE		(1009)		/* Should be a prime */
 
+#define SIZEOF_ARRAY(a)		(sizeof(a) / sizeof(a[0]))
+
 #define OPT_QUIET		(0x00000001)
 #define OPT_CUMULATIVE		(0x00000002)
 #define OPT_CMD_SHORT		(0x00000004)
@@ -244,7 +246,6 @@ static const int g_signals[] = {
 #ifdef SIGVTALRM
 	SIGVTALRM,
 #endif
-	-1,
 };
 
 /*
@@ -663,7 +664,7 @@ static bool pid_a_kernel_thread_guess(const char *task)
 
 	size_t i;
 
-	for (i = 0; kernel_tasks[i].task != NULL; i++) {
+	for (i = 0; i < SIZEOF_ARRAY(kernel_tasks); i++) {
 		if (!strncmp(task, kernel_tasks[i].task, kernel_tasks[i].len))
 			return true;
 	}
@@ -1619,7 +1620,7 @@ int main(int argc, char **argv)
 	bool forever = true;
 	bool redo = false;
 	struct sigaction new_action;
-	int i;
+	size_t i;
 
 	for (;;) {
 		int c = getopt(argc, argv, "bcCdksSlhin:qr:t:Tuw");
@@ -1721,7 +1722,7 @@ int main(int argc, char **argv)
 		g_opt_flags &= ~(OPT_CMD_SHORT | OPT_CMD_LONG);
 
 	(void)memset(&new_action, 0, sizeof(new_action));
-	for (i = 0; g_signals[i] != -1; i++) {
+	for (i = 0; i < SIZEOF_ARRAY(g_signals); i++) {
 		new_action.sa_handler = handle_sig;
 		(void)sigemptyset(&new_action.sa_mask);
 		new_action.sa_flags = 0;

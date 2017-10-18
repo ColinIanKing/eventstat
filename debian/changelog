@@ -1,3 +1,18 @@
+eventstat (0.04.02-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Iterate over arrays using size of array rather than using
+    sentinels at end of array
+  * Remove empty lines
+  * Voidify returns from various functions
+  * Add some UNLIKELY/LIKELY branch hinting
+  * debian/control: update Standards-Version to 4.1.1
+  * Prefix all globals with g_ to notify scope
+  * Use sizeof object rather than size of type
+  * Remove whitespace from source
+
+ -- Colin King <colin.king@canonical.com>  Wed, 18 Oct 2017 22:04:12 +0100
+
 eventstat (0.04.01-1) unstable; urgency=medium
 
   * Makefile: bump version

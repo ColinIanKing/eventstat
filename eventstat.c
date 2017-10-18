@@ -563,7 +563,7 @@ static void sample_add(timer_stat_t *timer_stat, const double whence)
 	 * list since time is assumed to be increasing
 	 */
 	if (!found) {
-		if ((sdl = calloc(1, sizeof(sample_delta_list_t))) == NULL)
+		if ((sdl = calloc(1, sizeof(*sdl))) == NULL)
 			err_abort("Cannot allocate sample delta list\n");
 		sdl->whence = whence;
 
@@ -577,7 +577,7 @@ static void sample_add(timer_stat_t *timer_stat, const double whence)
 	}
 
 	/* Now append the sdi onto the list */
-	if ((sdi = calloc(1, sizeof(sample_delta_item_t))) == NULL)
+	if ((sdi = calloc(1, sizeof(*sdi))) == NULL)
 		err_abort("Cannot allocate sample delta item\n");
 	sdi->delta_events = timer_stat->info->delta_events;
 	sdi->time_delta = timer_stat->info->last_used -
@@ -758,7 +758,7 @@ static void samples_dump(const char *filename)
 	}
 
 	sorted_timer_infos = calloc(timer_info_list_length,
-				sizeof(timer_info_t *));
+				sizeof(*sorted_timer_infos));
 	if (!sorted_timer_infos)
 		err_abort("Cannot allocate buffer for sorting timer_infos\n");
 
@@ -929,7 +929,7 @@ static HOT timer_info_t *timer_info_find(
 			return info;
 		}
 	}
-	info = calloc(1, sizeof(timer_info_t));
+	info = calloc(1, sizeof(*info));
 	if (!info)
 		err_abort("Cannot allocate timer info\n");
 
@@ -1175,7 +1175,7 @@ static void timer_stat_add(
 		timer_stat_free_list = timer_stat_free_list->next;
 	} else {
 		/* Get one from heap */
-		if ((ts_new = malloc(sizeof(timer_stat_t))) == NULL)
+		if ((ts_new = malloc(sizeof(*ts_new))) == NULL)
 			err_abort("Out of memory allocating a timer stat\n");
 	}
 
@@ -1725,7 +1725,7 @@ int main(int argc, char **argv)
 				errno, strerror(errno));
 	}
 
-	if ((timer_stats = calloc(TABLE_SIZE, sizeof(timer_stat_t*))) == NULL)
+	if ((timer_stats = calloc(TABLE_SIZE, sizeof(*timer_stats))) == NULL)
 		err_abort("Cannot allocate timer stats table\n");
 
 	/* Should really catch signals and set back to zero before we die */

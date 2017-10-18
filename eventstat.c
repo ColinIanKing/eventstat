@@ -281,7 +281,6 @@ static int pid_max_digits(void)
 		max_digits = min_digits;
 ret:
 	return max_digits;
-
 }
 
 /*

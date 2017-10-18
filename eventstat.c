@@ -95,6 +95,14 @@
 #define OPTIMIZE3
 #endif
 
+#if defined(__GNUC__)
+#define LIKELY(x)	__builtin_expect((x),1)
+#define UNLIKELY(x)	__builtin_expect((x),0)
+#else
+#define LIKELY(x)	(x)
+#define UNLIKELY(x)	(x)
+#endif
+
 #define FLOAT_TINY		(0.0000001)
 #define FLOAT_CMP(a, b)		(fabs(a - b) < FLOAT_TINY)
 
@@ -457,7 +465,7 @@ static double gettime_to_double(void)
 {
 	struct timeval tv;
 
-	if (gettimeofday(&tv, NULL) < 0)
+	if (UNLIKELY(gettimeofday(&tv, NULL) < 0))
 		err_abort("gettimeofday failed: errno=%d (%s)\n",
 			errno, strerror(errno));
 	return timeval_to_double(&tv);
@@ -577,7 +585,7 @@ static void sample_add(timer_stat_t *timer_stat, const double whence)
 	}
 
 	/* Now append the sdi onto the list */
-	if ((sdi = calloc(1, sizeof(*sdi))) == NULL)
+	if (UNLIKELY(((sdi = calloc(1, sizeof(*sdi))) == NULL)))
 		err_abort("Cannot allocate sample delta item\n");
 	sdi->delta_events = timer_stat->info->delta_events;
 	sdi->time_delta = timer_stat->info->last_used -
@@ -923,14 +931,14 @@ static HOT timer_info_t *timer_info_find(
 	const uint32_t h = hash_djb2a(ident);
 
 	for (info = g_timer_info_hash[h]; info; info = info->hash_next) {
-		if (strcmp(ident, info->ident) == 0) {
+		if (UNLIKELY(strcmp(ident, info->ident) == 0)) {
 			info->prev_used = info->last_used;
 			info->last_used = time_now;
 			return info;
 		}
 	}
 	info = calloc(1, sizeof(*info));
-	if (!info)
+	if (UNLIKELY(!info))
 		err_abort("Cannot allocate timer info\n");
 
 	info->pid = new_info->pid;
@@ -950,11 +958,11 @@ static HOT timer_info_t *timer_info_find(
 	info->total_events = 1;
 	info->delta_events = 1;
 
-	if (info->task == NULL ||
-	    info->task_mangled == NULL ||
-	    info->cmdline == NULL ||
-	    info->func == NULL ||
-	    info->ident == NULL) {
+	if (UNLIKELY(info->task == NULL ||
+		     info->task_mangled == NULL ||
+		     info->cmdline == NULL ||
+		     info->func == NULL ||
+		     info->ident == NULL)) {
 		err_abort("Out of memory allocating a timer stat fields\n");
 	}
 
@@ -1161,7 +1169,7 @@ static void timer_stat_add(
 	timer_stat_t *ts, *ts_new;
 
 	for (ts = timer_stats[h]; ts; ts = ts->next) {
-		if (strcmp(ts->info->ident, ident) == 0) {
+		if (UNLIKELY(strcmp(ts->info->ident, ident) == 0)) {
 			ts->info->total_events++;
 			ts->info->delta_events++;
 			sample_add(ts, time_now);
@@ -1390,7 +1398,7 @@ static char *read_events(const double time_end)
 	static size_t get_events_size;
 	size_t size;
 
-	if (g_get_events_buf == NULL) {
+	if (UNLIKELY(g_get_events_buf == NULL)) {
 		if ((g_get_events_buf = malloc(EVENT_BUF_SIZE << 1)) == NULL)
 			err_abort("Cannot read %s, out of memory\n",
 				g_sys_tracing_pipe);
@@ -1484,7 +1492,7 @@ static void get_events(
 
 		/* Find the end of a line */
 		while (*eol) {
-			if (*eol == '\n') {
+			if (UNLIKELY(*eol == '\n')) {
 				*eol = '\0';
 				eol++;
 				break;
@@ -1522,7 +1530,7 @@ static void get_events(
 
 		if (sscanf(ptr, "%10d\n", &info.pid) != 1)
 			goto next;
-		if (info.pid == 0)
+		if (UNLIKELY(info.pid == 0))
 			goto next;
 
 		/* Processes without a command line are kernel threads */

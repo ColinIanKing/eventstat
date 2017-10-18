@@ -175,16 +175,16 @@ static sample_delta_list_t *sample_delta_list_tail;
 /* ignore samples with event delta less than this */
 static double opt_threshold;
 
-static char *csv_results;		/* results in comma separated values */
-static char *get_events_buf;		/* buffer to glob events into */
-static uint32_t timer_info_list_length;	/* length of timer_info_list */
-static uint32_t opt_flags;		/* option flags */
-static volatile bool stop_eventstat = false;	/* set by sighandler */
-static bool sane_procs;			/* false if we are in a container */
-static bool resized;			/* window resized */
-static bool curses_init;		/* curses initialised */
-static int rows = 25;			/* tty size, rows */
-static int cols = 80;			/* tty size, columns */
+static char *g_csv_results;		/* results in comma separated values */
+static char *g_get_events_buf;		/* buffer to glob events into */
+static uint32_t g_timer_info_list_length; /* length of timer_info_list */
+static uint32_t g_opt_flags;		/* option flags */
+static volatile bool g_stop_eventstat = false;	/* set by sighandler */
+static bool g_sane_procs;		/* false if we are in a container */
+static bool g_resized;			/* window resized */
+static bool g_curses_init;		/* curses initialised */
+static int g_rows = 25;			/* tty size, rows */
+static int g_cols = 80;			/* tty size, columns */
 
 /*
  *  Attempt to catch a range of signals so
@@ -301,8 +301,8 @@ static void eventstat_winsize(void)
 	struct winsize ws;
 
 	if (ioctl(fileno(stdin), TIOCGWINSZ, &ws) != -1) {
-		rows = ws.ws_row;
-		cols = ws.ws_col;
+		g_rows = ws.ws_row;
+		g_cols = ws.ws_col;
 	}
 }
 
@@ -312,7 +312,7 @@ static void eventstat_winsize(void)
  */
 static inline void eventstat_clear(void)
 {
-	if (curses_init)
+	if (g_curses_init)
 		clear();
 }
 
@@ -322,7 +322,7 @@ static inline void eventstat_clear(void)
  */
 static inline void eventstat_refresh(void)
 {
-	if (curses_init)
+	if (g_curses_init)
 		refresh();
 }
 
@@ -332,7 +332,7 @@ static inline void eventstat_refresh(void)
  */
 static inline void eventstat_move(const int y, const int x)
 {
-	if (curses_init)
+	if (g_curses_init)
 		move(y, x);
 }
 
@@ -342,7 +342,7 @@ static inline void eventstat_move(const int y, const int x)
  */
 static void eventstat_endwin(void)
 {
-	if (curses_init) {
+	if (g_curses_init) {
 		clear();
 		endwin();
 	}
@@ -512,7 +512,7 @@ static void handle_sig(int dummy)
 {
 	(void)dummy;	/* Stop unused parameter warning with -Wextra */
 
-	stop_eventstat = true;
+	g_stop_eventstat = true;
 	set_tracing_enable("0\n", false);
 }
 
@@ -548,7 +548,7 @@ static void sample_add(timer_stat_t *timer_stat, const double whence)
 	sample_delta_list_t *sdl;
 	sample_delta_item_t *sdi;
 
-	if (csv_results == NULL)	/* No need if not enabled */
+	if (g_csv_results == NULL)	/* No need if not enabled */
 		return;
 
 	for (sdl = sample_delta_list_head; sdl; sdl = sdl->next) {
@@ -672,7 +672,7 @@ static bool pid_a_kernel_thread(const char *task, const pid_t id)
 	const pid_t pgid = id == 0 ? 0 : getpgid(id);
 
 	/* We are either in a container, or with a task with a NULL cmdline */
-	if (sane_procs || (id >= 0))
+	if (g_sane_procs || (id >= 0))
 		return (pgid == 0);
 
 	/* Can't get pgid on that pid, so make a guess */
@@ -707,7 +707,7 @@ static char *get_pid_cmdline(const pid_t id)
 	/*
 	 *  OPT_CMD_LONG option we get the full cmdline args
 	 */
-	if (opt_flags & OPT_CMD_LONG) {
+	if (g_opt_flags & OPT_CMD_LONG) {
 		for (ptr = buffer; ptr < buffer + ret - 1; ptr++) {
 			if (*ptr == '\0')
 				*ptr = ' ';
@@ -717,14 +717,14 @@ static char *get_pid_cmdline(const pid_t id)
 	/*
 	 *  OPT_CMD_SHORT option we discard anything after a space
 	 */
-	if (opt_flags & OPT_CMD_SHORT) {
+	if (g_opt_flags & OPT_CMD_SHORT) {
 		for (ptr = buffer; *ptr && (ptr < buffer + ret); ptr++) {
 			if (*ptr == ' ')
 				*ptr = '\0';
 		}
 	}
 
-	if (opt_flags & OPT_DIRNAME_STRIP)
+	if (g_opt_flags & OPT_DIRNAME_STRIP)
 		return strdup(basename(buffer));
 
 	return strdup(buffer);
@@ -757,7 +757,7 @@ static void samples_dump(const char *filename)
 		return;
 	}
 
-	sorted_timer_infos = calloc(timer_info_list_length,
+	sorted_timer_infos = calloc(g_timer_info_list_length,
 				sizeof(*sorted_timer_infos));
 	if (!sorted_timer_infos)
 		err_abort("Cannot allocate buffer for sorting timer_infos\n");
@@ -775,7 +775,7 @@ static void samples_dump(const char *filename)
 	for (i = 0; i < n; i++) {
 		char *task;
 
-		if (opt_flags & OPT_CMD)
+		if (g_opt_flags & OPT_CMD)
 			task = sorted_timer_infos[i]->cmdline;
 		else
 			task = sorted_timer_infos[i]->task_mangled;
@@ -819,7 +819,7 @@ static void samples_dump(const char *filename)
 			 *  raw sample count by scaling by 1.0 (i.e. no scaling)
 			 */
 			if (sdi) {
-				double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+				double duration = duration_round((g_opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
 				fprintf(fp, ",%f",
 					FLOAT_CMP(duration, 0.0) ? -99.99 :
 					(double)sdi->delta_events / duration);
@@ -832,7 +832,7 @@ static void samples_dump(const char *filename)
 	/*
 	 *  -S option - some statistics, min, max, average, std.dev.
 	 */
-	if (opt_flags & OPT_RESULT_STATS) {
+	if (g_opt_flags & OPT_RESULT_STATS) {
 		fprintf(fp, ",Min:");
 		for (i = 0; i < n; i++) {
 			double min = DBL_MAX;
@@ -842,7 +842,7 @@ static void samples_dump(const char *filename)
 					sample_find(sdl, sorted_timer_infos[i]);
 
 				if (sdi) {
-					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+					double duration = duration_round((g_opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
 					double val = FLOAT_CMP(duration, 0.0) ?
 						0.0 : sdi->delta_events / duration;
 					if (min > val)
@@ -862,7 +862,7 @@ static void samples_dump(const char *filename)
 					sample_find(sdl, sorted_timer_infos[i]);
 
 				if (sdi) {
-					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+					double duration = duration_round((g_opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
 					double val = FLOAT_CMP(duration, 0.0) ?
 						0.0 : sdi->delta_events / duration;
 					if (max < val)
@@ -892,7 +892,7 @@ static void samples_dump(const char *filename)
 				sample_delta_item_t *sdi =
 					sample_find(sdl, sorted_timer_infos[i]);
 				if (sdi) {
-					double duration = duration_round((opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
+					double duration = duration_round((g_opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
 					double diff = FLOAT_CMP(duration, 0.0) ? 0.0 :
 						((double)sdi->delta_events - average) / duration;
 					diff = diff * diff;
@@ -961,7 +961,7 @@ static HOT timer_info_t *timer_info_find(
 	/* Does not exist in list, append it */
 	info->next = timer_info_list;
 	timer_info_list = info;
-	timer_info_list_length++;
+	g_timer_info_list_length++;
 	info->hash_next = timer_info_hash[h];
 	timer_info_hash[h] = info;
 
@@ -1008,7 +1008,7 @@ static void timer_info_purge_old_from_timer_list(
 				*list = next;
 			else
 				prev->next = next;
-			timer_info_list_length--;
+			g_timer_info_list_length--;
 		} else {
 			prev = info;
 		}
@@ -1092,7 +1092,7 @@ static char *make_hash_ident(const timer_info_t *info)
 {
 	static char ident[128];
 
-	if (opt_flags & OPT_TIMER_ID) {
+	if (g_opt_flags & OPT_TIMER_ID) {
 		snprintf(ident, sizeof(ident), "%x%s%8.8s%" PRIx64,
 			info->pid, info->task, info->func, info->timer);
 	} else {
@@ -1197,7 +1197,7 @@ static void timer_stat_sort_freq_add(
 	timer_stat_t *new)		/* timer stat to add */
 {
 	while (*sorted) {
-		if (opt_flags & OPT_CUMULATIVE) {
+		if (g_opt_flags & OPT_CUMULATIVE) {
 			if ((*sorted)->info->total_events < new->info->total_events) {
 				new->sorted_freq_next = *(sorted);
 				break;
@@ -1223,7 +1223,7 @@ static void es_printf(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	if (curses_init) {
+	if (g_curses_init) {
 		char buf[256];
 
 		vsnprintf(buf, sizeof(buf), fmt, ap);
@@ -1254,7 +1254,7 @@ static OPTIMIZE3 void timer_stat_dump(
 			timer_stat_sort_freq_add(&sorted, ts);
 	}
 
-	if (!(opt_flags & OPT_QUIET)) {
+	if (!(g_opt_flags & OPT_QUIET)) {
 		uint64_t total = 0UL, kt_total = 0UL;
 		int32_t j = 0;
 		const int pid_size = pid_max_digits();
@@ -1262,23 +1262,23 @@ static OPTIMIZE3 void timer_stat_dump(
 		int min_width;
 
 		eventstat_winsize();
-		if (resized && curses_init) {
-			resizeterm(rows, cols);
+		if (g_resized && g_curses_init) {
+			resizeterm(g_rows, g_cols);
 			refresh();
-			resized = false;
+			g_resized = false;
 		}
 
 		/* Minimum width w/o task or func info */
 		min_width = EVENTS_WIDTH + 1 + \
 			    1 + \
 			    pid_size + 1;
-		if (!(opt_flags & OPT_BRIEF)) {
-			if (opt_flags & OPT_TIMER_ID)
+		if (!(g_opt_flags & OPT_BRIEF)) {
+			if (g_opt_flags & OPT_TIMER_ID)
 				min_width += TIMER_ID_WIDTH + 1;
 			fn_size = FUNC_WIDTH;
 		}
 
-		sz = cols - min_width;
+		sz = g_cols - min_width;
 		sz = (sz < 0) ? 0 : sz;
 
 		if (fn_size) {
@@ -1287,7 +1287,7 @@ static OPTIMIZE3 void timer_stat_dump(
 				fn_size = FUNC_WIDTH_MAX;
 
 			min_width += fn_size;
-			sz = cols - min_width;
+			sz = g_cols - min_width;
 			sz = (sz < 0) ? 0 : sz;
 		}
 		ta_size = sz;
@@ -1296,12 +1296,12 @@ static OPTIMIZE3 void timer_stat_dump(
 
 		es_printf("%*.*s %-*.*s %-*.*s",
 			EVENTS_WIDTH, EVENTS_WIDTH,
-			(opt_flags & OPT_CUMULATIVE) ?
+			(g_opt_flags & OPT_CUMULATIVE) ?
 				"Events" : "Event/s",
 			pid_size, pid_size, "PID",
 			ta_size, ta_size, "Task");
-		if (!(opt_flags & OPT_BRIEF)) {
-			if (opt_flags & OPT_TIMER_ID) {
+		if (!(g_opt_flags & OPT_BRIEF)) {
+			if (g_opt_flags & OPT_TIMER_ID) {
 				es_printf(" %-16.16s", "Timer ID");
 			}
 			es_printf("%-*.*s\n", fn_size, fn_size,
@@ -1313,14 +1313,14 @@ static OPTIMIZE3 void timer_stat_dump(
 		while (sorted) {
 			if (((n_lines == -1) || (j < n_lines)) &&
 			    (sorted->info->delta_events != 0)) {
-				char *task = (opt_flags & OPT_CMD) ?
+				char *task = (g_opt_flags & OPT_CMD) ?
 					sorted->info->cmdline :
 					sorted->info->task_mangled;
 				if (!*task)
 					task = sorted->info->task_mangled;
 
 				j++;
-				if (opt_flags & OPT_CUMULATIVE)
+				if (g_opt_flags & OPT_CUMULATIVE)
 					es_printf("%*" PRIu64 " ",
 						EVENTS_WIDTH,
 						sorted->info->total_events);
@@ -1329,7 +1329,7 @@ static OPTIMIZE3 void timer_stat_dump(
 						EVENTS_WIDTH,
 						(double)sorted->info->delta_events / duration);
 
-				if (opt_flags & OPT_BRIEF) {
+				if (g_opt_flags & OPT_BRIEF) {
 
 					es_printf("%*d %s\n",
 						pid_size, sorted->info->pid,
@@ -1338,7 +1338,7 @@ static OPTIMIZE3 void timer_stat_dump(
 					es_printf("%*d %-*.*s",
 						pid_size, sorted->info->pid,
 						ta_size, ta_size, task);
-					if (opt_flags & OPT_TIMER_ID) {
+					if (g_opt_flags & OPT_TIMER_ID) {
 						es_printf(" %16" PRIx64,
 							sorted->info->timer);
 					}
@@ -1359,7 +1359,7 @@ static OPTIMIZE3 void timer_stat_dump(
 			total, (double)total / duration,
 			(double)kt_total / duration,
 			(double)(total - kt_total) / duration);
-		if ((opt_flags & OPT_SHOW_WHENCE) && !curses_init) {
+		if ((g_opt_flags & OPT_SHOW_WHENCE) && !g_curses_init) {
 			time_t t = (time_t)whence;
 			char *timestr = ctime(&t);
 			char *pos = strchr(timestr, '\n');
@@ -1370,7 +1370,7 @@ static OPTIMIZE3 void timer_stat_dump(
 				"%.1f secs\n", timestr, time_delta);
 		}
 
-		if (!sane_procs)
+		if (!g_sane_procs)
 			es_printf("Note: this was run inside a container, "
 				"kernel tasks were guessed.\n");
 		es_printf("\n");
@@ -1390,8 +1390,8 @@ static char *read_events(const double time_end)
 	static size_t get_events_size;
 	size_t size;
 
-	if (get_events_buf == NULL) {
-		if ((get_events_buf = malloc(EVENT_BUF_SIZE << 1)) == NULL)
+	if (g_get_events_buf == NULL) {
+		if ((g_get_events_buf = malloc(EVENT_BUF_SIZE << 1)) == NULL)
 			err_abort("Cannot read %s, out of memory\n",
 				sys_tracing_pipe);
 
@@ -1402,7 +1402,7 @@ static char *read_events(const double time_end)
 		err_abort("Cannot open %s\n", sys_tracing_pipe);
 
 	size = 0;
-	while (!stop_eventstat) {
+	while (!g_stop_eventstat) {
 		ssize_t ret;
 		int rc;
 		static char buffer[EVENT_BUF_SIZE];
@@ -1427,7 +1427,7 @@ static char *read_events(const double time_end)
 		if (ret == 0)
 			continue;
 		if (ret < 0) {
-			if (!stop_eventstat &&
+			if (!g_stop_eventstat &&
 			    ((errno == EINTR) ||
 			     (errno != EAGAIN))) {
 				continue;
@@ -1439,21 +1439,21 @@ static char *read_events(const double time_end)
 			char *tmpptr;
 
 			get_events_size += (EVENT_BUF_SIZE << 1);
-			tmpptr = realloc(get_events_buf, get_events_size + 1);
+			tmpptr = realloc(g_get_events_buf, get_events_size + 1);
 			if (!tmpptr) {
 				(void)close(fd);
 				err_abort("Cannot read %s, out of memory\n",
 					sys_tracing_pipe);
 			}
-			get_events_buf = tmpptr;
+			g_get_events_buf = tmpptr;
 		}
-		memcpy(get_events_buf + size, buffer, ret);
+		memcpy(g_get_events_buf + size, buffer, ret);
 		size += ret;
-		*(get_events_buf + size) = '\0';
+		*(g_get_events_buf + size) = '\0';
 	}
 	(void)close(fd);
 
-	return get_events_buf;
+	return g_get_events_buf;
 }
 
 /*
@@ -1534,7 +1534,7 @@ static void get_events(
 			info.kernel_thread = true;
 
 		mask = info.kernel_thread ? OPT_KERNEL : OPT_USER;
-		if (!(opt_flags & mask))
+		if (!(g_opt_flags & mask))
 			goto free_next;
 
 		if (info.kernel_thread) {
@@ -1601,7 +1601,7 @@ static void handle_sigwinch(int sig)
 
 	eventstat_winsize();
 
-	resized = true;
+	g_resized = true;
 }
 
 int main(int argc, char **argv)
@@ -1621,22 +1621,22 @@ int main(int argc, char **argv)
 			break;
 		switch (c) {
 		case 'b':
-			opt_flags |= OPT_BRIEF;
+			g_opt_flags |= OPT_BRIEF;
 			break;
 		case 'c':
-			opt_flags |= OPT_CUMULATIVE;
+			g_opt_flags |= OPT_CUMULATIVE;
 			break;
 		case 'C':
-			opt_flags |= OPT_SAMPLE_COUNT;
+			g_opt_flags |= OPT_SAMPLE_COUNT;
 			break;
 		case 'd':
-			opt_flags |= OPT_DIRNAME_STRIP;
+			g_opt_flags |= OPT_DIRNAME_STRIP;
 			break;
 		case 'h':
 			show_usage();
 			eventstat_exit(EXIT_SUCCESS);
 		case 'i':
-			opt_flags |= OPT_TIMER_ID;
+			g_opt_flags |= OPT_TIMER_ID;
 			break;
 		case 'n':
 			errno = 0;
@@ -1648,7 +1648,7 @@ int main(int argc, char **argv)
 				err_abort("-n option must be greater than 0\n");
 			break;
 		case 'S':
-			opt_flags |= OPT_RESULT_STATS;
+			g_opt_flags |= OPT_RESULT_STATS;
 			break;
 		case 't':
 			opt_threshold = strtoull(optarg, NULL, 10);
@@ -1656,28 +1656,28 @@ int main(int argc, char **argv)
 				err_abort("-t threshold must be 1 or more.\n");
 			break;
 		case 'T':
-			opt_flags |= OPT_TOP;
+			g_opt_flags |= OPT_TOP;
 			break;
 		case 'q':
-			opt_flags |= OPT_QUIET;
+			g_opt_flags |= OPT_QUIET;
 			break;
 		case 'r':
-			csv_results = optarg;
+			g_csv_results = optarg;
 			break;
 		case 's':
-			opt_flags |= OPT_CMD_SHORT;
+			g_opt_flags |= OPT_CMD_SHORT;
 			break;
 		case 'l':
-			opt_flags |= OPT_CMD_LONG;
+			g_opt_flags |= OPT_CMD_LONG;
 			break;
 		case 'k':
-			opt_flags |= OPT_KERNEL;
+			g_opt_flags |= OPT_KERNEL;
 			break;
 		case 'u':
-			opt_flags |= OPT_USER;
+			g_opt_flags |= OPT_USER;
 			break;
 		case 'w':
-			opt_flags |= OPT_SHOW_WHENCE;
+			g_opt_flags |= OPT_SHOW_WHENCE;
 			break;
 		default:
 			show_usage();
@@ -1685,8 +1685,8 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (!(opt_flags & (OPT_KERNEL | OPT_USER)))
-		opt_flags |= (OPT_KERNEL | OPT_USER);
+	if (!(g_opt_flags & (OPT_KERNEL | OPT_USER)))
+		g_opt_flags |= (OPT_KERNEL | OPT_USER);
 
 	if (optind < argc) {
 		duration_secs = atof(argv[optind++]);
@@ -1710,9 +1710,9 @@ int main(int argc, char **argv)
 		err_abort("%s requires root privileges to gather "
 			"trace event data\n", app_name);
 
-	sane_procs = sane_proc_pid_info();
-	if (!sane_procs)
-		opt_flags &= ~(OPT_CMD_SHORT | OPT_CMD_LONG);
+	g_sane_procs = sane_proc_pid_info();
+	if (!g_sane_procs)
+		g_opt_flags &= ~(OPT_CMD_SHORT | OPT_CMD_LONG);
 
 	memset(&new_action, 0, sizeof(new_action));
 	for (i = 0; signals[i] != -1; i++) {
@@ -1734,7 +1734,7 @@ int main(int argc, char **argv)
 
 	time_now = time_start = gettime_to_double();
 
-	if (opt_flags & OPT_TOP) {
+	if (g_opt_flags & OPT_TOP) {
 		struct sigaction sa;
 
 		memset(&sa, 0, sizeof(sa));
@@ -1748,10 +1748,10 @@ int main(int argc, char **argv)
 		nodelay(stdscr, 1);
 		keypad(stdscr, 1);
 		curs_set(0);
-		curses_init = true;
+		g_curses_init = true;
 	}
 
-	while (!stop_eventstat && (forever || count--)) {
+	while (!g_stop_eventstat && (forever || count--)) {
 		double secs, duration, time_delta;
 
 		/* Timeout to wait for in the future for this sample */
@@ -1770,7 +1770,7 @@ int main(int argc, char **argv)
 
 		redo = false;
 
-		if (curses_init) {
+		if (g_curses_init) {
 			fd_set rfds;
 			int ch, ret;
 			struct timeval tv;
@@ -1814,14 +1814,14 @@ int main(int argc, char **argv)
 	}
 	eventstat_endwin();
 abort:
-	samples_dump(csv_results);
+	samples_dump(g_csv_results);
 
 	timer_stat_free_contents(timer_stats);
 	free(timer_stats);
 	samples_free();
 	timer_info_list_free();
 	timer_stat_free_list_free();
-	free(get_events_buf);
+	free(g_get_events_buf);
 
 	eventstat_exit(EXIT_SUCCESS);
 }

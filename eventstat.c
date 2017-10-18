@@ -367,7 +367,7 @@ err_abort(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	eventstat_endwin();
-	vfprintf(stderr,fmt, ap);
+	(void)vfprintf(stderr,fmt, ap);
 	va_end(ap);
 
 	exit(EXIT_FAILURE);
@@ -418,7 +418,7 @@ static void set_tracing_event(void)
 	set_tracing(g_sys_tracing_filter, "0", true);
 
 	/* Ignore event stat and idle events */
-	snprintf(buffer, sizeof(buffer),
+	(void)snprintf(buffer, sizeof(buffer),
 		"common_pid != %d && common_pid != 0", getpid());
 	set_tracing(g_sys_tracing_filter, buffer, true);
 }
@@ -698,7 +698,7 @@ static char *get_pid_cmdline(const pid_t id)
 	int fd;
 	ssize_t ret;
 
-	snprintf(buffer, sizeof(buffer), "/proc/%d/cmdline", id);
+	(void)snprintf(buffer, sizeof(buffer), "/proc/%d/cmdline", id);
 
 	if ((fd = open(buffer, O_RDONLY)) < 0)
 		return NULL;
@@ -761,7 +761,7 @@ static void samples_dump(const char *filename)
 		return;
 
 	if ((fp = fopen(filename, "w")) == NULL) {
-		fprintf(stderr, "Cannot write to file %s\n", filename);
+		(void)fprintf(stderr, "Cannot write to file %s\n", filename);
 		return;
 	}
 
@@ -788,19 +788,19 @@ static void samples_dump(const char *filename)
 		else
 			task = sorted_timer_infos[i]->task_mangled;
 
-		fprintf(fp, ",%s", task);
+		(void)fprintf(fp, ",%s", task);
 	}
-	fprintf(fp, "\n");
+	(void)fprintf(fp, "\n");
 
-	fprintf(fp, ",Init Function:");
+	(void)fprintf(fp, ",Init Function:");
 	for (i = 0; i < n; i++)
-		fprintf(fp, ",%s", sorted_timer_infos[i]->func);
-	fprintf(fp, "\n");
+		(void)fprintf(fp, ",%s", sorted_timer_infos[i]->func);
+	(void)fprintf(fp, "\n");
 
-	fprintf(fp, ",Total:");
+	(void)fprintf(fp, ",Total:");
 	for (i = 0; i < n; i++)
-		fprintf(fp, ",%" PRIu64, sorted_timer_infos[i]->total_events);
-	fprintf(fp, "\n");
+		(void)fprintf(fp, ",%" PRIu64, sorted_timer_infos[i]->total_events);
+	(void)fprintf(fp, "\n");
 
 	for (sdl = g_sample_delta_list_head; sdl; sdl = sdl->next) {
 		time_t t = (time_t)sdl->whence;
@@ -808,12 +808,12 @@ static void samples_dump(const char *filename)
 
 		count++;
 		tm = localtime(&t);
-		fprintf(fp, "%2.2d:%2.2d:%2.2d",
+		(void)fprintf(fp, "%2.2d:%2.2d:%2.2d",
 			tm->tm_hour, tm->tm_min, tm->tm_sec);
 
 		if (first_time < 0)
 			first_time = sdl->whence;
-		fprintf(fp, ",%f", duration_round(sdl->whence - first_time));
+		(void)fprintf(fp, ",%f", duration_round(sdl->whence - first_time));
 
 		/*
 		 * Scan in timer info order to be consistent for all sdl rows
@@ -828,20 +828,20 @@ static void samples_dump(const char *filename)
 			 */
 			if (sdi) {
 				double duration = duration_round((g_opt_flags & OPT_SAMPLE_COUNT) ? 1.0 : sdi->time_delta);
-				fprintf(fp, ",%f",
+				(void)fprintf(fp, ",%f",
 					FLOAT_CMP(duration, 0.0) ? -99.99 :
 					(double)sdi->delta_events / duration);
 			} else
-				fprintf(fp, ",%f", 0.0);
+				(void)fprintf(fp, ",%f", 0.0);
 		}
-		fprintf(fp, "\n");
+		(void)fprintf(fp, "\n");
 	}
 
 	/*
 	 *  -S option - some statistics, min, max, average, std.dev.
 	 */
 	if (g_opt_flags & OPT_RESULT_STATS) {
-		fprintf(fp, ",Min:");
+		(void)fprintf(fp, ",Min:");
 		for (i = 0; i < n; i++) {
 			double min = DBL_MAX;
 
@@ -857,11 +857,11 @@ static void samples_dump(const char *filename)
 						min = val;
 				}
 			}
-			fprintf(fp, ",%f", min);
+			(void)fprintf(fp, ",%f", min);
 		}
-		fprintf(fp, "\n");
+		(void)fprintf(fp, "\n");
 
-		fprintf(fp, ",Max:");
+		(void)fprintf(fp, ",Max:");
 		for (i = 0; i < n; i++) {
 			double max = DBL_MIN;
 
@@ -877,20 +877,20 @@ static void samples_dump(const char *filename)
 						max = val;
 				}
 			}
-			fprintf(fp, ",%f", max);
+			(void)fprintf(fp, ",%f", max);
 		}
-		fprintf(fp, "\n");
+		(void)fprintf(fp, "\n");
 
-		fprintf(fp, ",Average:");
+		(void)fprintf(fp, ",Average:");
 		for (i = 0; i < n; i++)
-			fprintf(fp, ",%f", count == 0 ? 0.0 :
+			(void)fprintf(fp, ",%f", count == 0 ? 0.0 :
 				(double)sorted_timer_infos[i]->total_events / count);
-		fprintf(fp, "\n");
+		(void)fprintf(fp, "\n");
 
 		/*
 		 *  population standard deviation
 		 */
-		fprintf(fp, ",Std.Dev.:");
+		(void)fprintf(fp, ",Std.Dev.:");
 		for (i = 0; i < n; i++) {
 			double average = (double)
 				sorted_timer_infos[i]->total_events / (double)count;
@@ -908,9 +908,9 @@ static void samples_dump(const char *filename)
 				}
 			}
 			sum = sum / (double)count;
-			fprintf(fp, ",%f", sqrt(sum));
+			(void)fprintf(fp, ",%f", sqrt(sum));
 		}
-		fprintf(fp, "\n");
+		(void)fprintf(fp, "\n");
 	}
 	free(sorted_timer_infos);
 	(void)fclose(fp);
@@ -1056,7 +1056,6 @@ static void timer_info_purge_old_from_hash_list(
 	}
 }
 
-
 /*
  *  timer_info_purge_old()
  *	clean out old timer infos
@@ -1101,10 +1100,10 @@ static char *make_hash_ident(const timer_info_t *info)
 	static char ident[128];
 
 	if (g_opt_flags & OPT_TIMER_ID) {
-		snprintf(ident, sizeof(ident), "%x%s%8.8s%" PRIx64,
+		(void)snprintf(ident, sizeof(ident), "%x%s%8.8s%" PRIx64,
 			info->pid, info->task, info->func, info->timer);
 	} else {
-		snprintf(ident, sizeof(ident), "%x%s%8.8s",
+		(void)snprintf(ident, sizeof(ident), "%x%s%8.8s",
 			info->pid, info->task, info->func);
 	}
 	return ident;
@@ -1234,10 +1233,10 @@ static void es_printf(const char *fmt, ...)
 	if (g_curses_init) {
 		char buf[256];
 
-		vsnprintf(buf, sizeof(buf), fmt, ap);
-		printw("%s", buf);
+		(void)vsnprintf(buf, sizeof(buf), fmt, ap);
+		(void)printw("%s", buf);
 	} else {
-		vprintf(fmt, ap);
+		(void)vprintf(fmt, ap);
 	}
 	va_end(ap);
 }
@@ -1455,7 +1454,7 @@ static char *read_events(const double time_end)
 			}
 			g_get_events_buf = tmpptr;
 		}
-		memcpy(g_get_events_buf + size, buffer, ret);
+		(void)memcpy(g_get_events_buf + size, buffer, ret);
 		size += ret;
 		*(g_get_events_buf + size) = '\0';
 	}
@@ -1500,9 +1499,9 @@ static void get_events(
 			eol++;
 		}
 		if (strstr(tmpptr, "hrtimer_start")) {
-			memset(&info, 0, sizeof(info));
-			memset(task, 0, sizeof(task));
-			memset(func, 0, sizeof(func));
+			(void)memset(&info, 0, sizeof(info));
+			(void)memset(task, 0, sizeof(task));
+			(void)memset(func, 0, sizeof(func));
 
 			/*
 			 *  Parse something like the following:
@@ -1548,12 +1547,12 @@ static void get_events(
 		if (info.kernel_thread) {
 			char tmp[sizeof(task)];
 
-			strcpy(tmp, task);
+			(void)strcpy(tmp, task);
 			tmp[13] = '\0';
-			snprintf(task_mangled, sizeof(task_mangled),
+			(void)snprintf(task_mangled, sizeof(task_mangled),
 				"[%s]", tmp);
 		} else {
-			strcpy(task_mangled, task);
+			(void)strcpy(task_mangled, task);
 		}
 
 		if (strncmp(task, g_app_name, app_name_len)) {
@@ -1579,9 +1578,9 @@ next:
  */
 static void show_usage(void)
 {
-	printf("%s, version %s\n\n", g_app_name, VERSION);
-	printf("Usage: %s [options] [duration] [count]\n", g_app_name);
-	printf("Options are:\n"
+	(void)printf("%s, version %s\n\n", g_app_name, VERSION);
+	(void)printf("Usage: %s [options] [duration] [count]\n", g_app_name);
+	(void)printf("Options are:\n"
 		"  -c\t\treport cumulative events rather than events per second.\n"
 		"  -C\t\treport event count rather than event per second in CSV output.\n"
 		"  -d\t\tremove pathname from long process name in CSV output.\n"
@@ -1722,10 +1721,10 @@ int main(int argc, char **argv)
 	if (!g_sane_procs)
 		g_opt_flags &= ~(OPT_CMD_SHORT | OPT_CMD_LONG);
 
-	memset(&new_action, 0, sizeof(new_action));
+	(void)memset(&new_action, 0, sizeof(new_action));
 	for (i = 0; g_signals[i] != -1; i++) {
 		new_action.sa_handler = handle_sig;
-		sigemptyset(&new_action.sa_mask);
+		(void)sigemptyset(&new_action.sa_mask);
 		new_action.sa_flags = 0;
 
 		if (sigaction(g_signals[i], &new_action, NULL) < 0)
@@ -1745,7 +1744,7 @@ int main(int argc, char **argv)
 	if (g_opt_flags & OPT_TOP) {
 		struct sigaction sa;
 
-		memset(&sa, 0, sizeof(sa));
+		(void)memset(&sa, 0, sizeof(sa));
 		sa.sa_handler = handle_sigwinch;
 		if (sigaction(SIGWINCH, &sa, NULL) < 0)
 			err_abort("sigaction failed: errno=%d (%s)\n",
@@ -1783,7 +1782,7 @@ int main(int argc, char **argv)
 			int ch, ret;
 			struct timeval tv;
 
-			memset(&tv, 0, sizeof(tv));
+			(void)memset(&tv, 0, sizeof(tv));
 
 			FD_ZERO(&rfds);
 			FD_SET(fileno(stdin), &rfds);
@@ -1798,7 +1797,7 @@ int main(int argc, char **argv)
 				if (errno != EINTR) {
 					eventstat_endwin();
 
-					fprintf(stderr, "select() failed: "
+					(void)fprintf(stderr, "select() failed: "
 						"errno=%d (%s)\n",
 						errno, strerror(errno));
 					goto abort;

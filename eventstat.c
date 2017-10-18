@@ -506,7 +506,6 @@ static bool sane_proc_pid_info(void)
 			ptr = pattern;
 		}
 	}
-
 	(void)fclose(fp);
 
 	return ret;

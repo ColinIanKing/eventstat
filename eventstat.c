@@ -798,7 +798,8 @@ static void samples_dump(const char *filename)
 
 	(void)fprintf(fp, ",Total:");
 	for (i = 0; i < n; i++)
-		(void)fprintf(fp, ",%" PRIu64, sorted_timer_infos[i]->total_events);
+		(void)fprintf(fp, ",%" PRIu64,
+			sorted_timer_infos[i]->total_events);
 	(void)fprintf(fp, "\n");
 
 	for (sdl = g_sample_delta_list_head; sdl; sdl = sdl->next) {
@@ -812,7 +813,8 @@ static void samples_dump(const char *filename)
 
 		if (first_time < 0)
 			first_time = sdl->whence;
-		(void)fprintf(fp, ",%f", duration_round(sdl->whence - first_time));
+		(void)fprintf(fp, ",%f",
+			duration_round(sdl->whence - first_time));
 
 		/*
 		 * Scan in timer info order to be consistent for all sdl rows
@@ -952,7 +954,7 @@ static HOT timer_info_t *timer_info_find(
 	info->time_total = new_info->time_total;
 	info->timer = new_info->timer;
 	info->ref_count = 0;
-	info->prev_used = time_now - duration;		/* Fake previous time */
+	info->prev_used = time_now - duration;	/* Fake previous time */
 	info->last_used = time_now;
 	info->total_events = 1;
 	info->delta_events = 1;
@@ -1068,7 +1070,8 @@ static inline void timer_info_purge_old(const double time_now)
 		size_t i;
 
 		count = 0;
-		timer_info_purge_old_from_timer_list(&g_timer_info_list, time_now);
+		timer_info_purge_old_from_timer_list(&g_timer_info_list,
+						     time_now);
 		for (i = 0; i < TABLE_SIZE; i++)
 			timer_info_purge_old_from_hash_list(&g_timer_info_hash[i], time_now);
 	}
@@ -1770,7 +1773,8 @@ int main(int argc, char **argv)
 		/* Play catch-up, probably been asleep */
 		if (secs < 0.0) {
 			t = ceil((time_now - time_start) / duration_secs);
-			secs = time_start + ((double)t * duration_secs) - time_now;
+			secs = time_start +
+				((double)t * duration_secs) - time_now;
 			/* Really, it's impossible, but just in case.. */
 			if (secs < 0.0)
 				secs = 0.0;
@@ -1818,7 +1822,8 @@ int main(int argc, char **argv)
 		time_delta = time_now - time_start;
 
 		eventstat_clear();
-		timer_stat_dump(duration, time_delta, n_lines, time_now, timer_stats);
+		timer_stat_dump(duration, time_delta, n_lines,
+				time_now, timer_stats);
 		eventstat_refresh();
 		timer_stat_free_contents(timer_stats);
 		timer_info_purge_old(time_now);

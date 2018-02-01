@@ -1264,7 +1264,7 @@ static OPTIMIZE3 void timer_stat_dump(
 		uint64_t total = 0UL, kt_total = 0UL;
 		int32_t j = 0;
 		const int pid_size = pid_max_digits();
-		int sz, ta_size, fn_size = 0;
+		int cols, sz, ta_size, fn_size = 0;
 		int min_width;
 
 		eventstat_winsize();
@@ -1283,8 +1283,12 @@ static OPTIMIZE3 void timer_stat_dump(
 				min_width += TIMER_ID_WIDTH + 1;
 			fn_size = FUNC_WIDTH;
 		}
+		if (!(g_opt_flags & OPT_CMD_LONG) && g_cols > 80)
+			cols = 80;
+		else
+			cols = g_cols;
 
-		sz = g_cols - min_width;
+		sz = cols - min_width;
 		sz = (sz < 0) ? 0 : sz;
 
 		if (fn_size) {
@@ -1293,9 +1297,10 @@ static OPTIMIZE3 void timer_stat_dump(
 				fn_size = FUNC_WIDTH_MAX;
 
 			min_width += fn_size;
-			sz = g_cols - min_width;
+			sz = cols - min_width;
 			sz = (sz < 0) ? 0 : sz;
 		}
+
 		ta_size = sz;
 		if (ta_size < TASK_WIDTH)
 			ta_size = TASK_WIDTH;

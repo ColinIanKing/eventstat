@@ -261,7 +261,7 @@ static int pid_max_digits(void)
 	const int min_digits = 5;
 	char buf[32];
 
-	if (max_digits)
+	if (LIKELY(max_digits))
 		goto ret;
 
 	max_digits = default_digits;
@@ -621,7 +621,7 @@ static int info_compare_total(const void *item1, const void *item2)
 	timer_info_t *const *info1 = (timer_info_t *const *)item1;
 	timer_info_t *const *info2 = (timer_info_t *const *)item2;
 
-	if ((*info2)->total_events == (*info1)->total_events)
+	if (UNLIKELY((*info2)->total_events == (*info1)->total_events))
 		return 0;
 
 	return ((*info2)->total_events > (*info1)->total_events) ? 1 : -1;
@@ -679,7 +679,7 @@ static bool pid_a_kernel_thread(const char *task, const pid_t id)
 	const pid_t pgid = id == 0 ? 0 : getpgid(id);
 
 	/* We are either in a container, or with a task with a NULL cmdline */
-	if (g_sane_procs || (id >= 0))
+	if (LIKELY(g_sane_procs || (id >= 0)))
 		return (pgid == 0);
 
 	/* Can't get pgid on that pid, so make a guess */
@@ -1203,7 +1203,7 @@ static void timer_stat_sort_freq_add(
 	timer_stat_t *new)		/* timer stat to add */
 {
 	while (*sorted) {
-		if (g_opt_flags & OPT_CUMULATIVE) {
+		if (UNLIKELY(g_opt_flags & OPT_CUMULATIVE)) {
 			if ((*sorted)->info->total_events < new->info->total_events) {
 				new->sorted_freq_next = *(sorted);
 				break;
@@ -1268,7 +1268,7 @@ static OPTIMIZE3 void timer_stat_dump(
 		int min_width;
 
 		eventstat_winsize();
-		if (g_resized && g_curses_init) {
+		if (UNLIKELY(g_resized && g_curses_init)) {
 			resizeterm(g_rows, g_cols);
 			refresh();
 			g_resized = false;
@@ -1416,7 +1416,7 @@ static char *read_events(const double time_end)
 		struct timeval tv;
 		fd_set rfds;
 
-		if (duration < 0.0)
+		if (UNLIKELY(duration < 0.0))
 			break;
 
 		tv = double_to_timeval(duration);
@@ -1425,14 +1425,14 @@ static char *read_events(const double time_end)
 
 		errno = 0;
 		rc = select(fd + 1, &rfds, NULL, NULL, &tv);
-		if (rc <= 0)
+		if (UNLIKELY(rc <= 0))
 			break;
 		if (!FD_ISSET(fd, &rfds))
 			continue;
 		ret = read(fd, buffer, sizeof(buffer));
 		if (ret == 0)
 			continue;
-		if (ret < 0) {
+		if (UNLIKELY(ret < 0)) {
 			if (!g_stop_eventstat &&
 			    ((errno == EINTR) ||
 			     (errno != EAGAIN))) {
@@ -1536,7 +1536,7 @@ static void get_events(
 		info.kernel_thread = pid_a_kernel_thread(task, info.pid);
 
 		/* Swapper is special, like all corner cases */
-		if (strncmp(task, "swapper", 6) == 0)
+		if (UNLIKELY(strncmp(task, "swapper", 6) == 0))
 			info.kernel_thread = true;
 
 		mask = info.kernel_thread ? OPT_KERNEL : OPT_USER;

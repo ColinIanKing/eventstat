@@ -3,7 +3,7 @@ Section: admin
 Priority: optional
 Maintainer: Colin King <colin.king@canonical.com>
 Uploaders: Kamal Mostafa <kamal@whence.com>
-Standards-Version: 4.1.1
+Standards-Version: 4.1.2
 Build-Depends: debhelper (>= 9), libncurses5-dev
 Homepage: http://kernel.ubuntu.com/~cking/eventstat
 
@@ -11,9 +11,9 @@ Package: eventstat
 Architecture: linux-any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: kernel event states monitoring tool
- Eventstat periodically dumps out the current kernel event state. 
+ Eventstat periodically dumps out the current kernel event state.
  It keeps track of current events and outputs the change in events
- on each output update.  The tool requires sudo to run since it 
+ on each output update.  The tool requires sudo to run since it
  needs to write to /proc/timer_stats to start and stop the event
  monitoring.
 

@@ -1,3 +1,17 @@
+eventstat (0.04.03-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * debian/control: update debhelper version
+  * Update debian/compat to 10
+  * debian/rules: remove trailing whitespace, cleans up lintian warning
+  * debian/control: update Standards-Version to 4.1.2, remove some whitespace
+  * re-format some overly wide source lines
+  * Don't force wide display unless long mode is used
+  * eventstat: add some more UNLIKELY/LIKELY annotations
+  * Update copyright dates
+
+ -- Colin King <colin.king@canonical.com>  Thu, 1 Feb 2018 10:03:05 +0000
+
 eventstat (0.04.02-1) unstable; urgency=medium
 
   * Makefile: bump version
@@ -493,6 +507,6 @@ eventstat (0.01.01) precise; urgency=low
 
 eventstat (0.01.00) precise; urgency=low
 
-  * Initial version 
+  * Initial version
 
  -- Colin King <colin.king@canonical.com>  Sat, 17 Dec 2011 20:44:00 +0000

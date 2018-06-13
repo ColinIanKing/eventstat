@@ -16,4 +16,3 @@ Description: kernel event states monitoring tool
  on each output update.  The tool requires sudo to run since it
  needs to write to /proc/timer_stats to start and stop the event
  monitoring.
-

@@ -554,7 +554,8 @@ static uint32_t get_proc_cpu_tasks(const pid_t pid)
 
 	(void)closedir(dir);
 
-	return n;
+	/* We should always have at least 1 task! */
+	return (n < 1) ? 1 : n;
 }
 
 #define SKIP_FIELDS(n)			\

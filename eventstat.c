@@ -1456,22 +1456,29 @@ static OPTIMIZE3 void timer_stat_dump(
 		if (ta_size < TASK_WIDTH)
 			ta_size = TASK_WIDTH;
 
-		es_printf("%*.*s %-*.*s %5s %3.3s %3.3s %-*.*s",
-			EVENTS_WIDTH, EVENTS_WIDTH,
-			(g_opt_flags & OPT_CUMULATIVE) ?
-				"Events" : "Event/s",
-			pid_size, pid_size, "PID",
-			"%CPU", "PR", "NI",
-			ta_size, ta_size, "Task");
-		if (!(g_opt_flags & OPT_BRIEF)) {
-			if (g_opt_flags & OPT_TIMER_ID) {
-				es_printf(" %-16.16s", "Timer ID");
-			}
-			es_printf("%-*.*s\n", fn_size, fn_size,
-				" Init Function");
+		if (g_opt_flags & OPT_BRIEF) {
+			es_printf("%*.*s %-*.*s %-*.*s",
+				EVENTS_WIDTH, EVENTS_WIDTH,
+				(g_opt_flags & OPT_CUMULATIVE) ?
+					"Events" : "Event/s",
+				pid_size, pid_size, "PID",
+				ta_size, ta_size, "Task");
 		} else {
-			es_printf("\n");
+			es_printf("%*.*s %-*.*s %5s %3.3s %3.3s %-*.*s",
+				EVENTS_WIDTH, EVENTS_WIDTH,
+				(g_opt_flags & OPT_CUMULATIVE) ?
+					"Events" : "Event/s",
+				pid_size, pid_size, "PID",
+				"%CPU", "PR", "NI",
+				ta_size, ta_size, "Task");
+
+			if (g_opt_flags & OPT_TIMER_ID) {
+				es_printf(" %16.16s", "Timer ID");
+			}
+			es_printf("%-*.*s", fn_size, fn_size,
+				" Init Function");
 		}
+		es_printf("\n");
 
 		while (sorted) {
 			if (((n_lines == -1) || (j < n_lines)) &&

@@ -40,6 +40,7 @@
 #include <float.h>
 #include <ncurses.h>
 #include <ctype.h>
+#include <dirent.h>
 
 #define TABLE_SIZE		(1009)		/* Should be a prime */
 
@@ -121,10 +122,15 @@ typedef struct timer_info {
 	char		*func;		/* Kernel waiting func */
 	char		*ident;		/* Unique identity */
 	bool		kernel_thread;	/* True if task is a kernel thread */
+	uint16_t	cpu_rt_prio;	/* process priority level */
+	int16_t		cpu_nice;	/* process nice level */
 	uint32_t	ref_count;	/* Timer stat reference count */
 	uint64_t	timer;		/* Timer ID */
 	uint64_t	total_events;	/* Total number of events */
 	uint64_t	delta_events;	/* Events in one time period */
+	uint32_t	cpu_tasks;	/* Number of tasks sharing ticks */
+	uint64_t	cpu_ticks;	/* CPU utilization ticks */
+	double		cpu_ticks_time;	/* CPU utilization ticks, last read */
 	double		time_total;	/* Total time */
 	double		last_used;	/* Last referenced */
 	double		prev_used;	/* Previous time used */
@@ -195,6 +201,7 @@ static bool g_resized;			/* window resized */
 static bool g_curses_init;		/* curses initialised */
 static int g_rows = 25;			/* tty size, rows */
 static int g_cols = 80;			/* tty size, columns */
+static uint64_t clock_tick_rate;	/* system clock tick rate */
 
 /*
  *  Attempt to catch a range of signals so
@@ -525,6 +532,134 @@ static void handle_sig(int dummy)
 
 	g_stop_eventstat = true;
 	set_tracing_enable("0\n", false);
+}
+
+static uint32_t get_proc_cpu_tasks(const pid_t pid)
+{
+	char path[PATH_MAX];
+	DIR *dir;
+	struct dirent *d;
+	uint32_t n = 0;
+
+	snprintf(path, sizeof(path), "/proc/%d/task", pid);
+	dir = opendir(path);
+
+	if (!dir)
+		return 1;
+
+	while ((d = readdir(dir)) != NULL) {
+		if (d->d_name[0] != '.')
+			n++;
+	}
+
+	(void)closedir(dir);
+
+	return n;
+}
+
+#define SKIP_FIELDS(n)			\
+	skip = n;			\
+	while (skip > 0 && *ptr) {	\
+		if (*ptr == ' ')	\
+			skip--;		\
+		ptr++;			\
+	}				\
+	if (UNLIKELY(*ptr == '\0'))	\
+		return -1;		\
+
+/*
+ *  get_proc_cpu_ticks()
+ *	get cpu ticks for a given pid
+ *	unique tasks
+ */
+static int get_proc_cpu_ticks(
+	const pid_t pid,
+	uint64_t *ticks,
+	uint16_t *rt_prio,
+	int16_t *niceness)
+{
+	char buffer[4096], path[PATH_MAX], *ptr = buffer, *endptr;
+	int fd, skip;
+	uint64_t utime, stime;
+	ssize_t len;
+
+	snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+
+	*ticks = 0;
+
+	if ((fd = open(path, O_RDONLY)) < 0)
+		return -1;
+
+	len = read(fd, buffer, sizeof(buffer) - 1);
+	(void)close(fd);
+	if (UNLIKELY(len <= 1))
+		return -1;
+
+	buffer[len] = '\0';
+
+	/* 3173 (a.out) R 3093 3173 3093 34818 3173 4202496 165 0 0 0 3194 0 */
+
+	/*
+	 *  We used to use scanf but this is really expensive and it
+	 *  is far faster to parse the data via a more tedious means
+	 *  of scanning down the buffer manually..
+	 */
+	if ((pid_t)strtoul(ptr, &endptr, 10) != pid)
+		return -1;
+
+	if (endptr == ptr)
+		return -1;
+
+	ptr = endptr;
+	if (UNLIKELY(*ptr != ' '))
+		return -1;
+	ptr++;
+	if (UNLIKELY((*ptr != '(')))
+		return -1;
+	ptr++;
+	/* parse comm field */
+	while ((*ptr != '\0') && (*ptr !=')'))
+		ptr++;
+	if (UNLIKELY(*ptr != ')'))
+		return -1;
+	ptr++;
+	if (UNLIKELY(*ptr != ' '))
+		return -1;
+	/* skip over state field */
+	ptr+=2 ;
+
+	/* Skip over fields to the 14th field (utime) */
+	SKIP_FIELDS(11)
+
+	/* Field 14, utime */
+	utime = strtoull(ptr, &endptr, 10);
+	if (UNLIKELY(endptr == ptr))
+		return -1;
+	ptr = endptr;
+	if (UNLIKELY(*ptr != ' '))
+		return -1;
+	ptr++;
+	/* Field 15, stime */
+	stime = strtoull(ptr, &endptr, 10);
+	if (UNLIKELY(endptr == ptr))
+		return -1;
+
+	/* Skip over fields to the 19th field (utime) */
+	SKIP_FIELDS(4)
+
+	/* Field 19, niceness */
+	*niceness = strtoul(ptr, &endptr, 10);
+	if (UNLIKELY(endptr == ptr))
+		return -1;
+
+	SKIP_FIELDS(21)
+	/* Field 40, rt_priority */
+	*rt_prio = strtol(ptr, &endptr, 10);
+	if (UNLIKELY(endptr == ptr))
+		return -1;
+
+	*ticks = utime + stime;
+	return 0;
 }
 
 /*
@@ -962,6 +1097,8 @@ static HOT timer_info_t *timer_info_find(
 	info->last_used = time_now;
 	info->total_events = 1;
 	info->delta_events = 1;
+	get_proc_cpu_ticks(info->pid, &info->cpu_ticks, &info->cpu_rt_prio, &info->cpu_nice);
+	info->cpu_ticks_time = time_now;
 
 	if (UNLIKELY(info->task == NULL ||
 		     info->task_mangled == NULL ||
@@ -1234,17 +1371,22 @@ static void timer_stat_sort_freq_add(
 static void es_printf(const char *fmt, ...)
 {
 	va_list ap;
+	static int col = 0;
+	int n;
+	char buf[256], *eol;
 
 	va_start(ap, fmt);
-	if (g_curses_init) {
-		char buf[256];
-
-		(void)vsnprintf(buf, sizeof(buf), fmt, ap);
-		(void)printw("%s", buf);
-	} else {
-		(void)vprintf(fmt, ap);
-	}
+	n = vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
+	eol = strchr(buf, '\n');
+
+	if (n + col >= g_cols) {
+		n = g_cols - col;
+		buf[n > 0 ? n : 0] = '\0';
+	}
+
+	(void)(g_curses_init ? printw : printf)("%s", buf);
+	col = eol ? 0 : col + n;
 }
 
 /*
@@ -1259,6 +1401,7 @@ static OPTIMIZE3 void timer_stat_dump(
 {
 	size_t i;
 	timer_stat_t *sorted = NULL;
+	double now = gettime_to_double();
 
 	for (i = 0; i < TABLE_SIZE; i++) {
 		timer_stat_t *ts;
@@ -1284,7 +1427,7 @@ static OPTIMIZE3 void timer_stat_dump(
 		/* Minimum width w/o task or func info */
 		min_width = EVENTS_WIDTH + 1 + \
 			    1 + \
-			    pid_size + 1;
+			    pid_size + 1 + 6 + 4 + 4;
 		if (!(g_opt_flags & OPT_BRIEF)) {
 			if (g_opt_flags & OPT_TIMER_ID)
 				min_width += TIMER_ID_WIDTH + 1;
@@ -1312,11 +1455,12 @@ static OPTIMIZE3 void timer_stat_dump(
 		if (ta_size < TASK_WIDTH)
 			ta_size = TASK_WIDTH;
 
-		es_printf("%*.*s %-*.*s %-*.*s",
+		es_printf("%*.*s %-*.*s %5s %3.3s %3.3s %-*.*s",
 			EVENTS_WIDTH, EVENTS_WIDTH,
 			(g_opt_flags & OPT_CUMULATIVE) ?
 				"Events" : "Event/s",
 			pid_size, pid_size, "PID",
+			"%CPU", "PR", "NI",
 			ta_size, ta_size, "Task");
 		if (!(g_opt_flags & OPT_BRIEF)) {
 			if (g_opt_flags & OPT_TIMER_ID) {
@@ -1348,13 +1492,35 @@ static OPTIMIZE3 void timer_stat_dump(
 						(double)sorted->info->delta_events / duration);
 
 				if (g_opt_flags & OPT_BRIEF) {
-
 					es_printf("%*d %s\n",
 						pid_size, sorted->info->pid,
 						task);
 				} else {
-					es_printf("%*d %-*.*s",
+					double tick_time = now - sorted->info->cpu_ticks_time;
+					uint32_t tasks = get_proc_cpu_tasks(sorted->info->pid);
+					uint64_t cpu_ticks;
+					uint64_t ticks;
+					uint16_t cpu_rt_prio;
+					int16_t cpu_nice;
+					double cpu;
+
+					get_proc_cpu_ticks(sorted->info->pid, &cpu_ticks,
+							   &cpu_rt_prio, &cpu_nice);
+
+					if (cpu_ticks && sorted->info->cpu_ticks) {
+						ticks = cpu_ticks - sorted->info->cpu_ticks;
+						cpu = (100.0 * (double)ticks) / (tick_time * (double)clock_tick_rate);
+					} else {
+						cpu = 0.0;
+					}
+					sorted->info->cpu_ticks = cpu_ticks;
+					sorted->info->cpu_ticks_time = now;
+
+					es_printf("%*d %5.1f %3d %3d %-*.*s",
 						pid_size, sorted->info->pid,
+						cpu / (double)tasks,
+						sorted->info->cpu_rt_prio,
+						sorted->info->cpu_nice,
 						ta_size, ta_size, task);
 					if (g_opt_flags & OPT_TIMER_ID) {
 						es_printf(" %16" PRIx64,
@@ -1437,8 +1603,11 @@ static char *read_events(const double time_end)
 
 		errno = 0;
 		rc = select(fd + 1, &rfds, NULL, NULL, &tv);
-		if (UNLIKELY(rc <= 0))
+		if (UNLIKELY(rc <= 0)) {
+			if (errno == EINTR)
+				continue;
 			break;
+		}
 		if (!FD_ISSET(fd, &rfds))
 			continue;
 		ret = read(fd, buffer, sizeof(buffer));
@@ -1750,6 +1919,7 @@ int main(int argc, char **argv)
 	set_tracing_enable("1\n", true);
 	set_tracing_event();
 
+	clock_tick_rate = (uint64_t)sysconf(_SC_CLK_TCK);
 	time_now = time_start = gettime_to_double();
 
 	if (g_opt_flags & OPT_TOP) {

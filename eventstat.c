@@ -116,24 +116,24 @@ typedef struct timer_info {
 	struct timer_info *next;	/* Next in list */
 	struct timer_info *hash_next;	/* Next in hash list */
 	pid_t		pid;
+	uint32_t	ref_count;	/* Timer stat reference count */
 	char 		*task;		/* Name of process/kernel task */
 	char 		*task_mangled;	/* Modified name of process/kernel */
 	char		*cmdline;	/* From /proc/$pid/cmdline */
 	char		*func;		/* Kernel waiting func */
 	char		*ident;		/* Unique identity */
-	bool		kernel_thread;	/* True if task is a kernel thread */
-	uint16_t	cpu_rt_prio;	/* process priority level */
-	int16_t		cpu_nice;	/* process nice level */
-	uint32_t	ref_count;	/* Timer stat reference count */
 	uint64_t	timer;		/* Timer ID */
 	uint64_t	total_events;	/* Total number of events */
 	uint64_t	delta_events;	/* Events in one time period */
+	uint16_t	cpu_rt_prio;	/* process priority level */
+	int16_t		cpu_nice;	/* process nice level */
 	uint32_t	cpu_tasks;	/* Number of tasks sharing ticks */
 	uint64_t	cpu_ticks;	/* CPU utilization ticks */
 	double		cpu_ticks_time;	/* CPU utilization ticks, last read */
 	double		time_total;	/* Total time */
 	double		last_used;	/* Last referenced */
 	double		prev_used;	/* Previous time used */
+	bool		kernel_thread;	/* True if task is a kernel thread */
 } timer_info_t;
 
 typedef struct timer_stat {

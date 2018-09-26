@@ -328,7 +328,7 @@ static void eventstat_winsize(void)
 static inline void eventstat_clear(void)
 {
 	if (g_curses_init)
-		clear();
+		(void)clear();
 }
 
 /*
@@ -338,7 +338,7 @@ static inline void eventstat_clear(void)
 static inline void eventstat_refresh(void)
 {
 	if (g_curses_init)
-		refresh();
+		(void)refresh();
 }
 
 /*
@@ -348,7 +348,7 @@ static inline void eventstat_refresh(void)
 static inline void eventstat_move(const int y, const int x)
 {
 	if (g_curses_init)
-		move(y, x);
+		(void)move(y, x);
 }
 
 /*
@@ -358,8 +358,8 @@ static inline void eventstat_move(const int y, const int x)
 static void eventstat_endwin(void)
 {
 	if (g_curses_init) {
-		clear();
-		endwin();
+		(void)clear();
+		(void)endwin();
 	}
 }
 
@@ -381,7 +381,7 @@ err_abort(const char *fmt, ...)
 }
 
 /*
- *  set_tracing_enable()
+ *  set_tracing()
  *	enable/disable timer stat
  */
 static void set_tracing(const char *path, const char *str, const bool carp)
@@ -541,7 +541,7 @@ static uint32_t get_proc_cpu_tasks(const pid_t pid)
 	struct dirent *d;
 	uint32_t n = 0;
 
-	snprintf(path, sizeof(path), "/proc/%d/task", pid);
+	(void)snprintf(path, sizeof(path), "/proc/%d/task", pid);
 	dir = opendir(path);
 
 	if (!dir)
@@ -584,7 +584,7 @@ static int get_proc_cpu_ticks(
 	uint64_t utime, stime;
 	ssize_t len;
 
-	snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+	(void)snprintf(path, sizeof(path), "/proc/%d/stat", pid);
 
 	*ticks = 0;
 
@@ -1420,8 +1420,8 @@ static OPTIMIZE3 void timer_stat_dump(
 
 		eventstat_winsize();
 		if (UNLIKELY(g_resized && g_curses_init)) {
-			resizeterm(g_rows, g_cols);
-			refresh();
+			(void)resizeterm(g_rows, g_cols);
+			(void)refresh();
 			g_resized = false;
 		}
 
@@ -1938,12 +1938,12 @@ int main(int argc, char **argv)
 		if (sigaction(SIGWINCH, &sa, NULL) < 0)
 			err_abort("sigaction failed: errno=%d (%s)\n",
 				errno, strerror(errno));
-		initscr();
-		cbreak();
-		noecho();
-		nodelay(stdscr, 1);
-		keypad(stdscr, 1);
-		curs_set(0);
+		(void)initscr();
+		(void)cbreak();
+		(void)noecho();
+		(void)nodelay(stdscr, 1);
+		(void)keypad(stdscr, 1);
+		(void)curs_set(0);
 		g_curses_init = true;
 	}
 

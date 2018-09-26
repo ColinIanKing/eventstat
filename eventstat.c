@@ -1671,7 +1671,7 @@ static void get_events(
 	while (*tmpptr) {
 		char *ptr, *eol = tmpptr;
 		char task[64];
-		char task_mangled[64];
+		char task_mangled[68];
 		char func[64];
 		char *cmdline;
 		int mask;

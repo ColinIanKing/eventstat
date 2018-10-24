@@ -1,3 +1,16 @@
+eventstat (0.04.05-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Makefile: add .travis.yml file to dist rule
+  * Makefile: rename snapcraft to snap in make dist rule
+  * Add in some missing voidifications on function returns
+  * Make task_mangled large enough to avoid truncation
+  * Re-order some fields in timer_info to pack more efficiently
+  * Rename snapcraft directory to snap
+  * Add travis build yaml file
+
+ -- Colin King <colin.king@canonical.com>  Wed, 24 Oct 2018 09:40:01 +0100
+
 eventstat (0.04.04-1) unstable; urgency=medium
 
   * Makefile: bump version

@@ -1505,7 +1505,6 @@ static OPTIMIZE3 void timer_stat_dump(
 					double tick_time = now - sorted->info->cpu_ticks_time;
 					uint32_t tasks = get_proc_cpu_tasks(sorted->info->pid);
 					uint64_t cpu_ticks;
-					uint64_t ticks;
 					uint16_t cpu_rt_prio;
 					int16_t cpu_nice;
 					double cpu;
@@ -1514,7 +1513,8 @@ static OPTIMIZE3 void timer_stat_dump(
 							   &cpu_rt_prio, &cpu_nice);
 
 					if (cpu_ticks && sorted->info->cpu_ticks) {
-						ticks = cpu_ticks - sorted->info->cpu_ticks;
+						uint64_t ticks = cpu_ticks - sorted->info->cpu_ticks;
+
 						cpu = (100.0 * (double)ticks) / (tick_time * (double)clock_tick_rate);
 					} else {
 						cpu = 0.0;

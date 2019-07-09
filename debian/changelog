@@ -1,3 +1,12 @@
+eventstat (0.04.06-1) unstable; urgency=medium
+
+    Makefile: bump version
+    Reduce scope of variable ticks
+    Remove unused assignments
+    Update copyright year
+
+ -- Colin King <colin.king@canonical.com>  Tue, 9 Jul 2019 23:43:24 +0100
+
 eventstat (0.04.05-1) unstable; urgency=medium
 
   * Makefile: bump version

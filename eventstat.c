@@ -1089,8 +1089,6 @@ static HOT timer_info_t *timer_info_find(
 	info->func = strdup(new_info->func);
 	info->ident = strdup(ident);
 	info->kernel_thread = new_info->kernel_thread;
-	info->total_events = new_info->total_events;
-	info->delta_events = new_info->delta_events;
 	info->time_total = new_info->time_total;
 	info->timer = new_info->timer;
 	info->ref_count = 0;

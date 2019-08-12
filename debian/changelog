@@ -1,9 +1,19 @@
+eventstat (0.04.07-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Update compat to level 12
+  * snap: clean up Makefile
+  * snap: makefile: remove versioning magic
+  * snapcraft: make versioning automatic
+
+ -- Colin King <colin.king@canonical.com>  Mon, 12 Aug 2019 16:30:11 +0100
+
 eventstat (0.04.06-1) unstable; urgency=medium
 
-    Makefile: bump version
-    Reduce scope of variable ticks
-    Remove unused assignments
-    Update copyright year
+  * Makefile: bump version
+  * Reduce scope of variable ticks
+  * Remove unused assignments
+  * Update copyright year
 
  -- Colin King <colin.king@canonical.com>  Tue, 9 Jul 2019 23:43:24 +0100
 

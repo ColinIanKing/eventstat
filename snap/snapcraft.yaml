@@ -1,5 +1,7 @@
 name: eventstat
-version: 0.03.04-20170425-264-0910972
+version: git
+version-script: |
+    echo $(git describe --tags)
 summary: kernel event states monitoring tool
 description:  Eventstat periodically dumps out the current kernel event state.  It keeps track of current events and outputs the change in events on each output update.  The tool requires sudo to run since it needs to write to /proc/timer_stats to start and stop the event monitoring.
 confinement: strict

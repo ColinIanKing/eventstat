@@ -709,7 +709,8 @@ static void sample_add(timer_stat_t *timer_stat, const double whence)
 	 * list since time is assumed to be increasing
 	 */
 	if (!found) {
-		if ((sdl = calloc(1, sizeof(*sdl))) == NULL)
+		sdl = calloc(1, sizeof(*sdl));
+		if (UNLIKELY(!sdl))
 			err_abort("Cannot allocate sample delta list\n");
 		sdl->whence = whence;
 
@@ -723,7 +724,8 @@ static void sample_add(timer_stat_t *timer_stat, const double whence)
 	}
 
 	/* Now append the sdi onto the list */
-	if (UNLIKELY(((sdi = calloc(1, sizeof(*sdi))) == NULL)))
+	sdi = calloc(1, sizeof(*sdi));
+	if (UNLIKELY(!sdi))
 		err_abort("Cannot allocate sample delta item\n");
 	sdi->delta_events = timer_stat->info->delta_events;
 	sdi->time_delta = timer_stat->info->last_used -
@@ -865,7 +867,7 @@ static char *get_pid_comm(const pid_t id, bool kernel_thread)
 	if (kernel_thread) {
 		size_t len = strlen(buffer) + 3;
 		comm = malloc(len);
-		if (!comm)
+		if (UNLIKELY(!comm))
 			return unknown_comm();
 		snprintf(comm, len, "[%s]", buffer);
 	} else {
@@ -961,7 +963,7 @@ static void samples_dump(const char *filename)
 
 	sorted_timer_infos = calloc(g_timer_info_list_length,
 				sizeof(*sorted_timer_infos));
-	if (!sorted_timer_infos)
+	if (UNLIKELY(!sorted_timer_infos))
 		err_abort("Cannot allocate buffer for sorting timer_infos\n");
 
 	/* Just want the timers with some non-zero total */
@@ -1379,7 +1381,8 @@ static void timer_stat_add(
 		g_timer_stat_free_list = g_timer_stat_free_list->next;
 	} else {
 		/* Get one from heap */
-		if ((ts_new = malloc(sizeof(*ts_new))) == NULL)
+		ts_new = malloc(sizeof(*ts_new));
+		if (UNLIKELY(!ts_new))
 			err_abort("Out of memory allocating a timer stat\n");
 	}
 
@@ -1639,9 +1642,11 @@ static char *read_events(const double time_end)
 	size_t size;
 
 	if (UNLIKELY(g_get_events_buf == NULL)) {
-		if ((g_get_events_buf = malloc(EVENT_BUF_SIZE << 1)) == NULL)
+		g_get_events_buf = malloc(EVENT_BUF_SIZE << 1);
+		if (UNLIKELY(!g_get_events_buf)) {
 			err_abort("Cannot read %s, out of memory\n",
 				g_sys_tracing_pipe);
+		}
 
 		get_events_size = (EVENT_BUF_SIZE << 1);
 	}
@@ -1691,7 +1696,7 @@ static char *read_events(const double time_end)
 
 			get_events_size += (EVENT_BUF_SIZE << 1);
 			tmpptr = realloc(g_get_events_buf, get_events_size + 1);
-			if (!tmpptr) {
+			if (UNLIKELY(!tmpptr)) {
 				(void)close(fd);
 				err_abort("Cannot read %s, out of memory\n",
 					g_sys_tracing_pipe);
@@ -1965,7 +1970,8 @@ int main(int argc, char **argv)
 				errno, strerror(errno));
 	}
 
-	if ((timer_stats = calloc(TABLE_SIZE, sizeof(*timer_stats))) == NULL)
+	timer_stats = calloc(TABLE_SIZE, sizeof(*timer_stats));
+	if (UNLIKELY(!timer_stats))
 		err_abort("Cannot allocate timer stats table\n");
 
 	/* Should really catch signals and set back to zero before we die */

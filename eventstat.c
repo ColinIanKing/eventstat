@@ -117,9 +117,8 @@ typedef struct timer_info {
 	struct timer_info *hash_next;	/* Next in hash list */
 	pid_t		pid;
 	uint32_t	ref_count;	/* Timer stat reference count */
-	char 		*task;		/* Name of process/kernel task */
-	char 		*task_mangled;	/* Modified name of process/kernel */
 	char		*cmdline;	/* From /proc/$pid/cmdline */
+	char		*comm;		/* from /proc/$pid/comm */
 	char		*func;		/* Kernel waiting func */
 	char		*ident;		/* Unique identity */
 	uint64_t	timer;		/* Timer ID */
@@ -827,8 +826,57 @@ static bool pid_a_kernel_thread(const char *task, const pid_t id)
 }
 
 /*
+ *  unknown_comm()
+ *	return an unknonw comm field replacement
+ */
+static char *unknown_comm(void)
+{
+	return strdup("<unknown>");
+}
+
+/*
+ *  get_pid_comm
+ *	get process /proc/pid/comm field info
+ */
+static char *get_pid_comm(const pid_t id, bool kernel_thread)
+{
+	char buffer[256];
+	ssize_t ret;
+	char *comm, *ptr;
+	int fd;
+
+	(void)snprintf(buffer, sizeof(buffer), "/proc/%d/comm", id);
+	if ((fd = open(buffer, O_RDONLY)) < 0)
+		return unknown_comm();
+
+	ret = read(fd, buffer, sizeof(buffer));
+	(void)close(fd);
+	if (ret <= 0)
+		return unknown_comm();
+
+	buffer[sizeof(buffer)-1] = '\0';
+	for (ptr = buffer; *ptr; ptr++) {
+		if (*ptr == '\n') {
+			*ptr = '\0';
+			break;
+		}
+	}
+
+	if (kernel_thread) {
+		size_t len = strlen(buffer) + 3;
+		comm = malloc(len);
+		snprintf(comm, len, "[%s]", buffer);
+	} else {
+		comm = strdup(buffer);
+	}
+	if (!comm)
+		return unknown_comm();
+	return comm;
+}
+
+/*
  *  get_pid_cmdline
- *	get process's /proc/pid/cmdline
+ *	get process /proc/pid/cmdline
  */
 static char *get_pid_cmdline(const pid_t id)
 {
@@ -925,7 +973,7 @@ static void samples_dump(const char *filename)
 		if (g_opt_flags & OPT_CMD)
 			task = sorted_timer_infos[i]->cmdline;
 		else
-			task = sorted_timer_infos[i]->task_mangled;
+			task = sorted_timer_infos[i]->comm;
 
 		(void)fprintf(fp, ",%s", task);
 	}
@@ -1083,8 +1131,7 @@ static HOT timer_info_t *timer_info_find(
 		err_abort("Cannot allocate timer info\n");
 
 	info->pid = new_info->pid;
-	info->task = strdup(new_info->task);
-	info->task_mangled = strdup(new_info->task_mangled);
+	info->comm = strdup(new_info->comm);
 	info->cmdline = strdup(new_info->cmdline);
 	info->func = strdup(new_info->func);
 	info->ident = strdup(ident);
@@ -1099,8 +1146,7 @@ static HOT timer_info_t *timer_info_find(
 	get_proc_cpu_ticks(info->pid, &info->cpu_ticks, &info->cpu_rt_prio, &info->cpu_nice);
 	info->cpu_ticks_time = time_now;
 
-	if (UNLIKELY(info->task == NULL ||
-		     info->task_mangled == NULL ||
+	if (UNLIKELY(info->comm == NULL ||
 		     info->cmdline == NULL ||
 		     info->func == NULL ||
 		     info->ident == NULL)) {
@@ -1125,10 +1171,8 @@ static void timer_info_free(void *data)
 {
 	timer_info_t *info = (timer_info_t*)data;
 
-	free(info->task);
-	if (info->cmdline != info->task_mangled)
-		free(info->cmdline);
-	free(info->task_mangled);
+	free(info->comm);
+	free(info->cmdline);
 	free(info->func);
 	free(info->ident);
 	free(info);
@@ -1243,10 +1287,10 @@ static char *make_hash_ident(const timer_info_t *info)
 
 	if (g_opt_flags & OPT_TIMER_ID) {
 		(void)snprintf(ident, sizeof(ident), "%x%s%8.8s%" PRIx64,
-			info->pid, info->task, info->func, info->timer);
+			info->pid, info->comm, info->func, info->timer);
 	} else {
 		(void)snprintf(ident, sizeof(ident), "%x%s%8.8s",
-			info->pid, info->task, info->func);
+			info->pid, info->comm, info->func);
 	}
 	return ident;
 }
@@ -1483,10 +1527,7 @@ static OPTIMIZE3 void timer_stat_dump(
 			    (sorted->info->delta_events != 0)) {
 				char *task = (g_opt_flags & OPT_CMD) ?
 					sorted->info->cmdline :
-					sorted->info->task_mangled;
-				if (!*task)
-					task = sorted->info->task_mangled;
-
+					sorted->info->comm;
 				j++;
 				if (g_opt_flags & OPT_CUMULATIVE)
 					es_printf("%*" PRIu64 " ",
@@ -1668,10 +1709,8 @@ static void get_events(
 
 	while (*tmpptr) {
 		char *ptr, *eol = tmpptr;
-		char task[64];
-		char task_mangled[68];
-		char func[64];
-		char *cmdline;
+		char func[64], task[64];
+		char *cmdline, *comm;
 		int mask;
 		timer_info_t info;
 
@@ -1686,7 +1725,6 @@ static void get_events(
 		}
 		if (strstr(tmpptr, "hrtimer_start")) {
 			(void)memset(&info, 0, sizeof(info));
-			(void)memset(task, 0, sizeof(task));
 			(void)memset(func, 0, sizeof(func));
 
 			/*
@@ -1721,6 +1759,7 @@ static void get_events(
 		/* Processes without a command line are kernel threads */
 		cmdline = get_pid_cmdline(info.pid);
 		info.kernel_thread = pid_a_kernel_thread(task, info.pid);
+		comm = get_pid_comm(info.pid, info.kernel_thread);
 
 		/* Swapper is special, like all corner cases */
 		if (UNLIKELY(strncmp(task, "swapper", 6) == 0))
@@ -1730,21 +1769,9 @@ static void get_events(
 		if (!(g_opt_flags & mask))
 			goto free_next;
 
-		if (info.kernel_thread) {
-			char tmp[sizeof(task)];
-
-			(void)strcpy(tmp, task);
-			tmp[13] = '\0';
-			(void)snprintf(task_mangled, sizeof(task_mangled),
-				"[%s]", tmp);
-		} else {
-			(void)strcpy(task_mangled, task);
-		}
-
 		if (strncmp(task, g_app_name, app_name_len)) {
-			info.task = task;
-			info.cmdline = cmdline ? cmdline : task_mangled;
-			info.task_mangled = task_mangled;
+			info.cmdline = cmdline ? cmdline : comm;
+			info.comm = comm;
 			info.func = func;
 			info.time_total = 0.0;
 			info.total_events = 1;
@@ -1753,6 +1780,7 @@ static void get_events(
 		}
 free_next:
 		free(cmdline);
+		free(comm);
 next:
 		tmpptr = eol;
 	}

@@ -1,3 +1,19 @@
+eventstat (0.04.08-1) unstable; urgency=medium
+
+  * Add UNLIKELY hinting on memory allocation failure checks
+  * check for failed allocation of comm field
+  * Add null check on failed allocation of comm field
+  * Add null check on return of ctime
+  * Don't strdup basename return but strdup base string
+  * Fix inverted null check logic on comm field
+  * Add null check on localtime return
+  * check that basename returns a non-null string
+  * fix out of memory allocation failure check
+  * eventstat: fix '\n' check on string (null ptr dereference)
+  * eventstat: use comm field for task name rather than task info field
+
+ -- Colin King <colin.king@canonical.com>  Mon, 16 Dec 2019 11:11:11 +0000
+
 eventstat (0.04.07-1) unstable; urgency=medium
 
   * Makefile: bump version

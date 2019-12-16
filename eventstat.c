@@ -1595,7 +1595,7 @@ static OPTIMIZE3 void timer_stat_dump(
 			char *timestr = ctime(&t);
 			char *pos = strchr(timestr, '\n');
 
-			if (*pos)
+			if (pos)
 				*pos = '\0';
 			es_printf("Timestamp: %s, Total Run Duration: "
 				"%.1f secs\n", timestr, time_delta);

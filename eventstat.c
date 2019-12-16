@@ -1142,7 +1142,7 @@ static HOT timer_info_t *timer_info_find(
 		err_abort("Cannot allocate timer info\n");
 
 	info->pid = new_info->pid;
-	info->comm = strdup(new_info->comm);
+	info->comm = new_info->comm ? strdup(new_info->comm) : unknown_comm();
 	info->cmdline = strdup(new_info->cmdline);
 	info->func = strdup(new_info->func);
 	info->ident = strdup(ident);

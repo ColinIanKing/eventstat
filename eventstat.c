@@ -1777,6 +1777,8 @@ static void get_events(
 		cmdline = get_pid_cmdline(info.pid);
 		info.kernel_thread = pid_a_kernel_thread(task, info.pid);
 		comm = get_pid_comm(info.pid, info.kernel_thread);
+		if (UNLIKELY(!comm))
+			goto free_next;
 
 		/* Swapper is special, like all corner cases */
 		if (UNLIKELY(strncmp(task, "swapper", 6) == 0))

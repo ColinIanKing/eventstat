@@ -865,7 +865,7 @@ static char *get_pid_comm(const pid_t id, bool kernel_thread)
 	if (kernel_thread) {
 		size_t len = strlen(buffer) + 3;
 		comm = malloc(len);
-		if (comm)
+		if (!comm)
 			return unknown_comm();
 		snprintf(comm, len, "[%s]", buffer);
 	} else {

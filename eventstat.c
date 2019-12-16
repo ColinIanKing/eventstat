@@ -1003,8 +1003,12 @@ static void samples_dump(const char *filename)
 
 		count++;
 		tm = localtime(&t);
-		(void)fprintf(fp, "%2.2d:%2.2d:%2.2d",
-			tm->tm_hour, tm->tm_min, tm->tm_sec);
+		if (tm) {
+			(void)fprintf(fp, "%2.2d:%2.2d:%2.2d",
+				tm->tm_hour, tm->tm_min, tm->tm_sec);
+		} else {
+			(void)fprintf(fp, "--:--:--");
+		}
 
 		if (first_time < 0)
 			first_time = sdl->whence;

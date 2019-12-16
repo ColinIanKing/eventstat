@@ -926,7 +926,7 @@ static char *get_pid_cmdline(const pid_t id)
 
 		/* Should always be true */
 		if (base)
-			return strdup(basename(buffer));
+			return strdup(base);
 	}
 
 	return strdup(buffer);

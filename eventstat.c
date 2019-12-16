@@ -921,8 +921,13 @@ static char *get_pid_cmdline(const pid_t id)
 		}
 	}
 
-	if (g_opt_flags & OPT_DIRNAME_STRIP)
-		return strdup(basename(buffer));
+	if (g_opt_flags & OPT_DIRNAME_STRIP) {
+		char *base = basename(buffer);
+
+		/* Should always be true */
+		if (base)
+			return strdup(basename(buffer));
+	}
 
 	return strdup(buffer);
 }

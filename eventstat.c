@@ -1604,7 +1604,13 @@ static OPTIMIZE3 void timer_stat_dump(
 		if ((g_opt_flags & OPT_SHOW_WHENCE) && !g_curses_init) {
 			time_t t = (time_t)whence;
 			char *timestr = ctime(&t);
-			char *pos = strchr(timestr, '\n');
+			char *pos;
+
+			if (timestr) {
+				pos = strchr(timestr, '\n');
+			} else {
+				pos = "<unknown>";
+			}
 
 			if (pos)
 				*pos = '\0';

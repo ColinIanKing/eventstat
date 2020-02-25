@@ -32,6 +32,7 @@ endif
 
 BINDIR=/usr/bin
 MANDIR=/usr/share/man/man8
+BASHDIR=/usr/share/bash-completion/completions
 
 eventstat: eventstat.o
 	$(CC) $(CFLAGS) $< -lm -lncurses -o $@ $(LDFLAGS)
@@ -43,7 +44,7 @@ dist:
 	rm -rf eventstat-$(VERSION)
 	mkdir eventstat-$(VERSION)
 	cp -rp Makefile eventstat.c eventstat.8 COPYING snap .travis.yml \
-		eventstat-$(VERSION)
+		bash-completion eventstat-$(VERSION)
 	tar -zcf eventstat-$(VERSION).tar.gz eventstat-$(VERSION)
 	rm -rf eventstat-$(VERSION)
 
@@ -56,3 +57,5 @@ install: eventstat eventstat.8.gz
 	cp eventstat ${DESTDIR}${BINDIR}
 	mkdir -p ${DESTDIR}${MANDIR}
 	cp eventstat.8.gz ${DESTDIR}${MANDIR}
+	mkdir -p ${DESTDIR}${BASHDIR}
+	cp bash-completion/eventstat ${DESTDIR}${BASHDIR}

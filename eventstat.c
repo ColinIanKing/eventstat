@@ -314,6 +314,7 @@ static void eventstat_winsize(void)
 {
 	struct winsize ws;
 
+	(void)memset(&ws, 0, sizeof(ws));
 	if (ioctl(fileno(stdin), TIOCGWINSZ, &ws) != -1) {
 		g_rows = ws.ws_row;
 		g_cols = ws.ws_col;

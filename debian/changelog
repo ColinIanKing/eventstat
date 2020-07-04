@@ -1,3 +1,12 @@
+eventstat (0.04.10-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Debian/control: update compat to 13, remove compat file,
+    add Rules-Requires-Root no rule
+  * zero ws struct to clear static analysis warnings
+
+ -- Colin King <colin.king@canonical.com>  Sat, 4 Jul 2020 10:46:24 +0000
+
 eventstat (0.04.09-1) unstable; urgency=medium
 
   * Makefile: bump version

@@ -579,7 +579,7 @@ static int get_proc_cpu_ticks(
 	uint16_t *rt_prio,
 	int16_t *niceness)
 {
-	char buffer[4096], path[PATH_MAX], *ptr = buffer, *endptr;
+	char buffer[4096], path[PATH_MAX], *ptr = buffer, *endptr, *tmp;
 	int fd, skip;
 	uint64_t utime, stime;
 	ssize_t len;
@@ -619,10 +619,10 @@ static int get_proc_cpu_ticks(
 		return -1;
 	ptr++;
 	/* parse comm field */
-	while ((*ptr != '\0') && (*ptr !=')'))
-		ptr++;
-	if (UNLIKELY(*ptr != ')'))
-		return -1;
+	for (tmp = ptr; *tmp; tmp++) {
+		if (*tmp == ')')
+			ptr = tmp;
+	}
 	ptr++;
 	if (UNLIKELY(*ptr != ' '))
 		return -1;

@@ -1,3 +1,13 @@
+eventstat (0.04.12-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Debian/control: remove uploaders field
+  * Rename clock_tick_rate to g_clock_tick_rate
+  * Make get_events_buf local
+  * Copyright: update to 2021
+
+ -- Colin King <colin.king@canonical.com>  Thu, 29 Apr 2021 09:21:55 +0100
+
 eventstat (0.04.11-1) unstable; urgency=medium
 
   * Makefile: bump version

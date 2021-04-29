@@ -199,7 +199,7 @@ static bool g_resized;			/* window resized */
 static bool g_curses_init;		/* curses initialised */
 static int g_rows = 25;			/* tty size, rows */
 static int g_cols = 80;			/* tty size, columns */
-static uint64_t clock_tick_rate;	/* system clock tick rate */
+static uint64_t g_clock_tick_rate;	/* system clock tick rate */
 
 /*
  *  Attempt to catch a range of signals so
@@ -1570,7 +1570,7 @@ static OPTIMIZE3 void timer_stat_dump(
 					if (cpu_ticks && sorted->info->cpu_ticks) {
 						uint64_t ticks = cpu_ticks - sorted->info->cpu_ticks;
 
-						cpu = (100.0 * (double)ticks) / (tick_time * (double)clock_tick_rate);
+						cpu = (100.0 * (double)ticks) / (tick_time * (double)g_clock_tick_rate);
 					} else {
 						cpu = 0.0;
 					}
@@ -1981,7 +1981,7 @@ int main(int argc, char **argv)
 	set_tracing_enable("1\n", true);
 	set_tracing_event();
 
-	clock_tick_rate = (uint64_t)sysconf(_SC_CLK_TCK);
+	g_clock_tick_rate = (uint64_t)sysconf(_SC_CLK_TCK);
 	time_now = time_start = gettime_to_double();
 
 	if (g_opt_flags & OPT_TOP) {

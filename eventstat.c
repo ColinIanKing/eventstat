@@ -191,7 +191,6 @@ static sample_delta_list_t *g_sample_delta_list_tail;
 static double g_opt_threshold;
 
 static char *g_csv_results;		/* results in comma separated values */
-static char *g_get_events_buf;		/* buffer to glob events into */
 static uint32_t g_timer_info_list_length; /* length of timer_info_list */
 static uint32_t g_opt_flags;		/* option flags */
 static volatile bool g_stop_eventstat = false;	/* set by sighandler */
@@ -1636,15 +1635,15 @@ static OPTIMIZE3 void timer_stat_dump(
  *	only free'd at exit time.  This way we can parse
  *	the data a little faster.
  */
-static char *read_events(const double time_end)
+static char *read_events(const double time_end, char **get_events_buf)
 {
 	int fd;
 	static size_t get_events_size;
 	size_t size;
 
-	if (UNLIKELY(g_get_events_buf == NULL)) {
-		g_get_events_buf = malloc(EVENT_BUF_SIZE << 1);
-		if (UNLIKELY(!g_get_events_buf)) {
+	if (UNLIKELY(*get_events_buf == NULL)) {
+		*get_events_buf = calloc(EVENT_BUF_SIZE << 1, sizeof(char));
+		if (UNLIKELY(!*get_events_buf)) {
 			err_abort("Cannot read %s, out of memory\n",
 				g_sys_tracing_pipe);
 		}
@@ -1696,21 +1695,21 @@ static char *read_events(const double time_end)
 			char *tmpptr;
 
 			get_events_size += (EVENT_BUF_SIZE << 1);
-			tmpptr = realloc(g_get_events_buf, get_events_size + 1);
+			tmpptr = realloc(*get_events_buf, get_events_size + 1);
 			if (UNLIKELY(!tmpptr)) {
 				(void)close(fd);
 				err_abort("Cannot read %s, out of memory\n",
 					g_sys_tracing_pipe);
 			}
-			g_get_events_buf = tmpptr;
+			*get_events_buf = tmpptr;
 		}
-		(void)memcpy(g_get_events_buf + size, buffer, ret);
+		(void)memcpy((*get_events_buf) + size, buffer, ret);
 		size += ret;
-		*(g_get_events_buf + size) = '\0';
+		*(*get_events_buf + size) = '\0';
 	}
 	(void)close(fd);
 
-	return g_get_events_buf;
+	return *get_events_buf;
 }
 
 /*
@@ -1720,13 +1719,15 @@ static char *read_events(const double time_end)
  */
 static void get_events(
 	timer_stat_t *timer_stats[],
+	char **get_events_buf,
 	const double time_now,
 	const double duration)
 {
 	const size_t app_name_len = strlen(g_app_name);
 	const double time_end = time_now + duration - 0.05;
-	char *tmpptr = read_events(time_end);
+	char *tmpptr;
 
+	tmpptr = read_events(time_end, get_events_buf);
 	if (!tmpptr)
 		return;
 
@@ -1853,6 +1854,7 @@ static void handle_sigwinch(int sig)
 int main(int argc, char **argv)
 {
 	timer_stat_t **timer_stats;
+	char *get_events_buf = NULL;
 	double duration_secs = 1.0, time_start, time_now;
 	int64_t count = 1, t = 1;
 	int32_t n_lines = -1;
@@ -2048,7 +2050,7 @@ int main(int argc, char **argv)
 			}
 		}
 
-		get_events(timer_stats, time_now, secs);
+		get_events(timer_stats, &get_events_buf, time_now, secs);
 
 		duration = gettime_to_double() - time_now;
 		duration = floor((duration * 1000.0) + 0.5) / 1000.0;
@@ -2071,7 +2073,7 @@ abort:
 	samples_free();
 	timer_info_list_free();
 	timer_stat_free_list_free();
-	free(g_get_events_buf);
+	free(get_events_buf);
 
 	eventstat_exit(EXIT_SUCCESS);
 }

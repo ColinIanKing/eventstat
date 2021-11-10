@@ -1,3 +1,16 @@
+eventstat (0.04.13-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Makefile: add README.md to dist rule
+  * manual: update date, author email and copyright
+  * debian/watch: update watch path for tarball, move to version 4
+  * debian/copyright: Update copyright and git URL
+  * debian/control: update author email address and project URL
+  * Add README.md file
+  * snapcraft: update to core20
+
+ -- Colin Ian King <colin.i.king@gmail.com>  Wed, 10 Nov 2021 08:32:15 +0000
+
 eventstat (0.04.12-1) unstable; urgency=medium
 
   * Makefile: bump version

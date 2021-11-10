@@ -27,7 +27,7 @@ ifeq ($(PEDANTIC),1)
 CFLAGS += -Wabi -Wcast-qual -Wfloat-equal -Wmissing-declarations \
 	-Wmissing-format-attribute -Wno-long-long -Wpacked \
 	-Wredundant-decls -Wshadow -Wno-missing-field-initializers \
-	-Wno-missing-braces -Wno-sign-compare -Wno-multichar
+	-Wno-missing-braces -Wno-sign-compare -Wno-multichar -fanalyzer
 endif
 
 BINDIR=/usr/bin
@@ -44,7 +44,7 @@ dist:
 	rm -rf eventstat-$(VERSION)
 	mkdir eventstat-$(VERSION)
 	cp -rp Makefile eventstat.c eventstat.8 COPYING snap .travis.yml \
-		bash-completion eventstat-$(VERSION)
+		bash-completion README.md eventstat-$(VERSION)
 	tar -zcf eventstat-$(VERSION).tar.gz eventstat-$(VERSION)
 	rm -rf eventstat-$(VERSION)
 

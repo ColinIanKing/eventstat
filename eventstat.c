@@ -1544,14 +1544,15 @@ static OPTIMIZE3 void timer_stat_dump(
 					sorted->info->cmdline :
 					sorted->info->comm;
 				j++;
-				if (g_opt_flags & OPT_CUMULATIVE)
+				if (g_opt_flags & OPT_CUMULATIVE) {
 					es_printf("%*" PRIu64 " ",
 						EVENTS_WIDTH,
 						sorted->info->total_events);
-				else
+				} else {
 					es_printf("%*.2f ",
 						EVENTS_WIDTH,
-						(double)sorted->info->delta_events / duration);
+						(duration > 0.0) ? (double)sorted->info->delta_events / duration : 0.0);
+				}
 
 				if (g_opt_flags & OPT_BRIEF) {
 					es_printf("%*d %s\n",
@@ -1602,9 +1603,10 @@ static OPTIMIZE3 void timer_stat_dump(
 		eventstat_move(LINES - 1, 0);
 		es_printf("%" PRIu64 " Total events, %5.2f events/sec "
 			"(kernel: %5.2f, userspace: %5.2f)\n",
-			total, (double)total / duration,
-			(double)kt_total / duration,
-			(double)(total - kt_total) / duration);
+			total,
+			(duration > 0.0) ? (double)total / duration : 0.0,
+			(duration > 0.0) ? (double)kt_total / duration : 0.0,
+			(duration > 0.0) ? (double)(total - kt_total) / duration : 0.0);
 		if ((g_opt_flags & OPT_SHOW_WHENCE) && !g_curses_init) {
 			time_t t = (time_t)whence;
 			char *timestr = ctime(&t);

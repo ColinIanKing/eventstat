@@ -1749,6 +1749,7 @@ static void get_events(
 			eol++;
 		}
 		if (strstr(tmpptr, "hrtimer_start")) {
+			(void)memset(task, 0, sizeof(task));
 			(void)memset(&info, 0, sizeof(info));
 			(void)memset(func, 0, sizeof(func));
 
@@ -1756,7 +1757,7 @@ static void get_events(
 			 *  Parse something like the following:
 			 *  gnome-shell-3515  [003] d.h. 101499.108349: hrtimer_start: hrtimer=ffff99979e2d4600 function=tick_sched_timer expires=101497144000000 softexpires=101497144000000
 			 */
-			if (sscanf(tmpptr, "%s %*s %*s %*f: hrtimer_start: hrtimer=%" PRIx64 " function=%s", task, &info.timer, func) != 3)
+			if (sscanf(tmpptr, "%63s %*s %*s %*f: hrtimer_start: hrtimer=%" PRIx64 " function=%63s", task, &info.timer, func) != 3)
 				goto next;
 		} else {
 			goto next;

@@ -674,6 +674,7 @@ static inline void samples_free(void)
 	while (sdl) {
 		sample_delta_list_t *sdl_next = sdl->next;
 		sample_delta_item_t *sdi = sdl->list;
+
 		while (sdi) {
 			sample_delta_item_t *sdi_next = sdi->next;
 			free(sdi);
@@ -818,7 +819,7 @@ static bool pid_a_kernel_thread_guess(const char *task)
  */
 static bool pid_a_kernel_thread(const char *task, const pid_t id)
 {
-	const pid_t pgid = id == 0 ? 0 : getpgid(id);
+	const pid_t pgid = (id == 0) ? 0 : getpgid(id);
 
 	/* We are either in a container, or with a task with a NULL cmdline */
 	if (LIKELY(g_sane_procs || (id >= 0)))

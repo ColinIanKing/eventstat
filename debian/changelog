@@ -1,3 +1,14 @@
+eventstat (0.05.00-1) unstable; urgency=medium
+
+  * Makefile: bump to version 5.0
+  * Minor code cleanup, no functional changes
+  * debian/control: update standards version to 4.6.1
+  * Fix potential division by zero when duration is 0.0
+  * Limit sscanf string field sizes to match size of buffers being used
+  * Update copyright
+
+ -- Colin Ian King <colin.i.king@gmail.com>  Tue, 6 Dec 2022 11:47:22 +0000
+
 eventstat (0.04.13-1) unstable; urgency=medium
 
   * Makefile: bump version

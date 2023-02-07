@@ -46,7 +46,7 @@ dist:
 	mkdir eventstat-$(VERSION)
 	cp -rp Makefile eventstat.c eventstat.8 COPYING snap .travis.yml \
 		bash-completion README.md eventstat-$(VERSION)
-	tar -zcf eventstat-$(VERSION).tar.gz eventstat-$(VERSION)
+	tar -Jcf eventstat-$(VERSION).tar.xz eventstat-$(VERSION)
 	rm -rf eventstat-$(VERSION)
 
 clean:

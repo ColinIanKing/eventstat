@@ -1,3 +1,13 @@
+eventstat (0.05.01-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Makefile: use xz compression on make dist rule
+  * debian/control: use libncurses-dev instead of libncurses5-dev
+  * debian/control: update standards version to 4.6.2
+  * Update copyright year and email address
+
+ -- Colin Ian King <colin.i.king@gmail.com>  Tue, 7 Feb 2023 14:23:28 +0000
+
 eventstat (0.05.00-1) unstable; urgency=medium
 
   * Makefile: bump to version 5.0

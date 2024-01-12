@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #
 
-VERSION=0.05.01
+VERSION=0.05.02
 
 CFLAGS += -Wall -Wextra -DVERSION='"$(VERSION)"' -O2
 

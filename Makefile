@@ -51,7 +51,7 @@ dist:
 
 clean:
 	rm -f eventstat eventstat.o eventstat.8.gz
-	rm -f eventstat-$(VERSION).tar.gz
+	rm -f eventstat-$(VERSION).tar.xz
 
 install: eventstat eventstat.8.gz
 	mkdir -p ${DESTDIR}${BINDIR}

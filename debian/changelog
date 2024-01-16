@@ -1,3 +1,12 @@
+eventstat (0.06.00-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Makefile: remove .xz tarball and not .gz
+  * eventstat: the Init Function should be annotated as "Kernel Init Function"
+  * eventstat: report all cumulative events
+
+ -- Colin Ian King <colin.i.king@gmail.com>  Tue, 16 Jan 2024 13:17:26 +0000
+
 eventstat (0.05.02-1) unstable; urgency=medium
 
   * Makefile: bump version

@@ -134,6 +134,7 @@ typedef struct timer_info {
 	double		last_used;	/* Last referenced */
 	double		prev_used;	/* Previous time used */
 	bool		kernel_thread;	/* True if task is a kernel thread */
+	bool		just_added;	/* True if recently added */
 } timer_info_t;
 
 typedef struct timer_stat {
@@ -1539,20 +1540,25 @@ static OPTIMIZE3 void timer_stat_dump(
 		es_printf("\n");
 
 		while (sorted) {
-			if (((n_lines == -1) || (j < n_lines)) &&
-			    (sorted->info->delta_events != 0)) {
+			uint64_t events;
+
+			if (g_opt_flags & OPT_CUMULATIVE)
+				events = sorted->info->total_events;
+			else
+				events = sorted->info->delta_events;
+
+			if (((n_lines == -1) || (j < n_lines)) && (events != 0)) {
 				char *task = (g_opt_flags & OPT_CMD) ?
 					sorted->info->cmdline :
 					sorted->info->comm;
 				j++;
 				if (g_opt_flags & OPT_CUMULATIVE) {
 					es_printf("%*" PRIu64 " ",
-						EVENTS_WIDTH,
-						sorted->info->total_events);
+						EVENTS_WIDTH, events);
 				} else {
 					es_printf("%*.2f ",
 						EVENTS_WIDTH,
-						(duration > 0.0) ? (double)sorted->info->delta_events / duration : 0.0);
+						(duration > 0.0) ? (double)events / duration : 0.0);
 				}
 
 				if (g_opt_flags & OPT_BRIEF) {
@@ -1730,10 +1736,16 @@ static void get_events(
 	const size_t app_name_len = strlen(g_app_name);
 	const double time_end = time_now + duration - 0.05;
 	char *tmpptr;
+	timer_info_t *pinfo;
 
 	tmpptr = read_events(time_end, get_events_buf);
 	if (!tmpptr)
 		return;
+
+	if (g_opt_flags & OPT_CUMULATIVE) {
+		for (pinfo = g_timer_info_list; pinfo; pinfo = pinfo->next)
+			pinfo->just_added = false;
+	}
 
 	while (*tmpptr) {
 		char *ptr, *eol = tmpptr;
@@ -1807,6 +1819,7 @@ static void get_events(
 			info.time_total = 0.0;
 			info.total_events = 1;
 			info.ident = make_hash_ident(&info);
+			info.just_added = true;
 			timer_stat_add(timer_stats, &info, time_now, duration);
 		}
 free_next:
@@ -1814,6 +1827,13 @@ free_next:
 		free(comm);
 next:
 		tmpptr = eol;
+	}
+
+	if (g_opt_flags & OPT_CUMULATIVE) {
+		for (pinfo = g_timer_info_list; pinfo; pinfo = pinfo->next) {
+			if (!pinfo->just_added)
+				timer_stat_add(timer_stats, pinfo, time_now, duration);
+		}
 	}
 }
 

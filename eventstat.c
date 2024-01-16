@@ -991,7 +991,7 @@ static void samples_dump(const char *filename)
 	}
 	(void)fprintf(fp, "\n");
 
-	(void)fprintf(fp, ",Init Function:");
+	(void)fprintf(fp, ",Kernel Init Function:");
 	for (i = 0; i < n; i++)
 		(void)fprintf(fp, ",%s", sorted_timer_infos[i]->func);
 	(void)fprintf(fp, "\n");
@@ -1535,7 +1535,7 @@ static OPTIMIZE3 void timer_stat_dump(
 				es_printf(" %16.16s", "Timer ID");
 			}
 			es_printf("%-*.*s", fn_size, fn_size,
-				" Init Function");
+				" Kernel Init Function");
 		}
 		es_printf("\n");
 
